@@ -17,6 +17,22 @@ func (t symbolKind) String() string {
 
 type Symbol uint16
 
+func (s Symbol) String() string {
+	kind, isStart, base := s.describe()
+	var prefix string
+	switch {
+	case isStart:
+		prefix = "s"
+	case kind == symbolKindNonTerminal:
+		prefix = "n"
+	case kind == symbolKindTerminal:
+		prefix = "t"
+	default:
+		prefix = "?"
+	}
+	return fmt.Sprintf("%v%v", prefix, base)
+}
+
 const (
 	symbolNil = Symbol(0)
 
@@ -93,6 +109,7 @@ func (s Symbol) describe() (symbolKind, bool, uint16) {
 
 type SymbolTable struct {
 	text2Sym map[string]Symbol
+	sym2Text map[Symbol]string
 	nsymBase uint16
 	tsymBase uint16
 }
@@ -100,6 +117,7 @@ type SymbolTable struct {
 func newSymbolTable() *SymbolTable {
 	return &SymbolTable{
 		text2Sym: map[string]Symbol{},
+		sym2Text: map[Symbol]string{},
 		nsymBase: symbolBaseMin,
 		tsymBase: symbolBaseMin,
 	}
@@ -115,6 +133,7 @@ func (t *SymbolTable) registerStartSymbol(text string) (Symbol, error) {
 	}
 	t.nsymBase++
 	t.text2Sym[text] = sym
+	t.sym2Text[sym] = text
 	return sym, nil
 }
 
@@ -128,6 +147,7 @@ func (t *SymbolTable) registerNonTerminalSymbol(text string) (Symbol, error) {
 	}
 	t.nsymBase++
 	t.text2Sym[text] = sym
+	t.sym2Text[sym] = text
 	return sym, nil
 }
 
@@ -141,6 +161,7 @@ func (t *SymbolTable) registerTerminalSymbol(text string) (Symbol, error) {
 	}
 	t.tsymBase++
 	t.text2Sym[text] = sym
+	t.sym2Text[sym] = text
 	return sym, nil
 }
 
@@ -149,4 +170,11 @@ func (t *SymbolTable) ToSymbol(text string) (Symbol, bool) {
 		return sym, true
 	}
 	return symbolNil, false
+}
+
+func (t *SymbolTable) ToText(sym Symbol) (string, bool) {
+	if text, ok := t.sym2Text[sym]; ok {
+		return text, true
+	}
+	return "", false
 }

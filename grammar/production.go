@@ -2,10 +2,15 @@ package grammar
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 )
 
 type ProductionID [32]byte
+
+func (id ProductionID) String() string {
+	return hex.EncodeToString(id[:])
+}
 
 func genProductionID(lhs Symbol, rhs []Symbol) ProductionID {
 	seq := lhs.Byte()

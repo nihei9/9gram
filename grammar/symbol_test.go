@@ -47,5 +47,12 @@ func TestSymbol(t *testing.T) {
 		if v := sym.isTerminal(); v != tt.isTerminal {
 			t.Fatalf("isTerminal property of \"%s\" is mismatched; want: %v, got: %v", tt.text, tt.isTerminal, v)
 		}
+		text, ok := tab.ToText(sym)
+		if !ok {
+			t.Fatalf("\"%s\" was not found", tt.text)
+		}
+		if text != tt.text {
+			t.Fatalf("text representation of a symbol is mismatched; want: %v, got: %v", tt.text, text)
+		}
 	}
 }

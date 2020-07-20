@@ -98,3 +98,18 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 
 	return gram, nil
 }
+
+type Table struct {
+	First *First
+}
+
+func GenTable(gram *Grammar) (*Table, error) {
+	fst, err := genFirst(gram.ProductionSet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create a FIRST set: %v", err)
+	}
+
+	return &Table{
+		First: fst,
+	}, nil
+}
