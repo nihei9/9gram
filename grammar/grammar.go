@@ -100,7 +100,8 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 }
 
 type Table struct {
-	First *First
+	First  *First
+	Follow *Follow
 }
 
 func GenTable(gram *Grammar) (*Table, error) {
@@ -109,7 +110,13 @@ func GenTable(gram *Grammar) (*Table, error) {
 		return nil, fmt.Errorf("failed to create a FIRST set: %v", err)
 	}
 
+	flw, err := genFollow(gram.ProductionSet, fst)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create a FOLLOW set: %v", err)
+	}
+
 	return &Table{
-		First: fst,
+		First:  fst,
+		Follow: flw,
 	}, nil
 }
