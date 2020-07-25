@@ -18,11 +18,13 @@ func (t symbolKind) String() string {
 type Symbol uint16
 
 func (s Symbol) String() string {
-	kind, isStart, base := s.describe()
+	kind, isStart, isEOF, base := s.describe()
 	var prefix string
 	switch {
 	case isStart:
 		prefix = "s"
+	case isEOF:
+		prefix = "e"
 	case kind == symbolKindNonTerminal:
 		prefix = "n"
 	case kind == symbolKindTerminal:
@@ -34,7 +36,8 @@ func (s Symbol) String() string {
 }
 
 const (
-	symbolNil = Symbol(0)
+	symbolNil = Symbol(0)      // 0000 0000 0000 0000
+	symbolEOF = Symbol(0xc001) // 1100 0000 0000 0001
 
 	symbolBaseMin = uint16(1)
 	symbolBaseMax = uint16(0xffff) >> 2
@@ -64,7 +67,7 @@ func (s Symbol) Byte() []byte {
 }
 
 func (s Symbol) isNil() bool {
-	_, _, base := s.describe()
+	_, _, _, base := s.describe()
 	return base == 0
 }
 
@@ -72,15 +75,23 @@ func (s Symbol) isStart() bool {
 	if s.isNil() {
 		return false
 	}
-	_, isStart, _ := s.describe()
+	_, isStart, _, _ := s.describe()
 	return isStart
+}
+
+func (s Symbol) isEOF() bool {
+	if s.isNil() {
+		return false
+	}
+	_, _, isEOF, _ := s.describe()
+	return isEOF
 }
 
 func (s Symbol) isNonTerminal() bool {
 	if s.isNil() {
 		return false
 	}
-	kind, _, _ := s.describe()
+	kind, _, _, _ := s.describe()
 	if kind == symbolKindNonTerminal {
 		return true
 	}
@@ -94,17 +105,22 @@ func (s Symbol) isTerminal() bool {
 	return !s.isNonTerminal()
 }
 
-func (s Symbol) describe() (symbolKind, bool, uint16) {
+func (s Symbol) describe() (symbolKind, bool, bool, uint16) {
 	kind := symbolKindNonTerminal
 	if uint16(s)&0x8000 > 0 {
 		kind = symbolKindTerminal
 	}
 	isStart := false
+	isEOF := false
 	if uint16(s)&0x4000 > 0 {
-		isStart = true
+		if kind == symbolKindNonTerminal {
+			isStart = true
+		} else {
+			isEOF = true
+		}
 	}
 	base := uint16(s) & 0x3fff
-	return kind, isStart, base
+	return kind, isStart, isEOF, base
 }
 
 type SymbolTable struct {

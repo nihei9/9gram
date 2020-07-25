@@ -100,8 +100,9 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 }
 
 type Table struct {
-	First  *First
-	Follow *Follow
+	LR0Automaton *LR0Automaton
+	Follow       *Follow
+	First        *First
 }
 
 func GenTable(gram *Grammar) (*Table, error) {
@@ -115,8 +116,14 @@ func GenTable(gram *Grammar) (*Table, error) {
 		return nil, fmt.Errorf("failed to create a FOLLOW set: %v", err)
 	}
 
+	automaton, err := genLR0Automaton(gram.ProductionSet, gram.AugmentedStartSymbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create a LR0 automaton: %v", err)
+	}
+
 	return &Table{
-		First:  fst,
-		Follow: flw,
+		LR0Automaton: automaton,
+		Follow:       flw,
+		First:        fst,
 	}, nil
 }

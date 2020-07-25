@@ -20,8 +20,13 @@ func genProductionID(lhs Symbol, rhs []Symbol) ProductionID {
 	return ProductionID(sha256.Sum256(seq))
 }
 
+type ProductionNum uint16
+
+const productionNumMin = ProductionNum(0)
+
 type production struct {
 	id     ProductionID
+	num    ProductionNum
 	lhs    Symbol
 	rhs    []Symbol
 	rhsLen int
@@ -58,12 +63,14 @@ func (p *production) isEmpty() bool {
 type productionSet struct {
 	lhs2Prods map[Symbol][]*production
 	id2Prod   map[ProductionID]*production
+	num       ProductionNum
 }
 
 func newProductionSet() *productionSet {
 	return &productionSet{
 		lhs2Prods: map[Symbol][]*production{},
 		id2Prod:   map[ProductionID]*production{},
+		num:       productionNumMin,
 	}
 }
 
@@ -71,6 +78,9 @@ func (ps *productionSet) append(prod *production) bool {
 	if _, ok := ps.id2Prod[prod.id]; ok {
 		return false
 	}
+
+	prod.num = ps.num
+	ps.num += 1
 
 	if prods, ok := ps.lhs2Prods[prod.lhs]; ok {
 		ps.lhs2Prods[prod.lhs] = append(prods, prod)
@@ -80,6 +90,11 @@ func (ps *productionSet) append(prod *production) bool {
 	ps.id2Prod[prod.id] = prod
 
 	return true
+}
+
+func (ps *productionSet) findByID(id ProductionID) (*production, bool) {
+	prod, ok := ps.id2Prod[id]
+	return prod, ok
 }
 
 func (ps *productionSet) findByLHS(lhs Symbol) ([]*production, bool) {
