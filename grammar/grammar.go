@@ -100,6 +100,7 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 }
 
 type Table struct {
+	LR           *ParsingTable
 	LR0Automaton *LR0Automaton
 	Follow       *Follow
 	First        *First
@@ -121,7 +122,13 @@ func GenTable(gram *Grammar) (*Table, error) {
 		return nil, fmt.Errorf("failed to create a LR0 automaton: %v", err)
 	}
 
+	ptab, err := genSLRParsingTable(automaton, gram.ProductionSet, flw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create a SLR parsing table: %v", err)
+	}
+
 	return &Table{
+		LR:           ptab,
 		LR0Automaton: automaton,
 		Follow:       flw,
 		First:        fst,
