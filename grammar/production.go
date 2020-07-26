@@ -22,7 +22,9 @@ func genProductionID(lhs Symbol, rhs []Symbol) ProductionID {
 
 type ProductionNum uint16
 
-const productionNumMin = ProductionNum(0)
+// Avoid using 0 as a production number.
+// In ACTION table, 0 means an empty entry.
+const productionNumMin = ProductionNum(1)
 
 type production struct {
 	id     ProductionID

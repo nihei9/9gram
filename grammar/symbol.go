@@ -15,6 +15,12 @@ func (t symbolKind) String() string {
 	return string(t)
 }
 
+type SymbolNum uint16
+
+func (n SymbolNum) Int() int {
+	return int(n)
+}
+
 type Symbol uint16
 
 func (s Symbol) String() string {
@@ -37,13 +43,14 @@ func (s Symbol) String() string {
 
 const (
 	symbolNil = Symbol(0)      // 0000 0000 0000 0000
-	symbolEOF = Symbol(0xc001) // 1100 0000 0000 0001
+	symbolEOF = Symbol(0xc001) // 1100 0000 0000 0001: The EOF symbol is treated as a terminal symbol.
 
-	symbolBaseMin = uint16(1)
-	symbolBaseMax = uint16(0xffff) >> 2
+	terminalSymbolNumMin    = SymbolNum(2) // The number 1 is used by the EOF symbol.
+	nonTerminalSymbolNumMin = SymbolNum(1)
+	symbolBaseMax           = SymbolNum(0xffff) >> 2
 )
 
-func newSymbol(kind symbolKind, isStart bool, base uint16) (Symbol, error) {
+func newSymbol(kind symbolKind, isStart bool, base SymbolNum) (Symbol, error) {
 	if base > symbolBaseMax {
 		return symbolNil, fmt.Errorf("a base of a symbol exceeds the limit; limit: %v, passed: %v", symbolBaseMax, base)
 	}
@@ -56,7 +63,7 @@ func newSymbol(kind symbolKind, isStart bool, base uint16) (Symbol, error) {
 	if isStart {
 		startMask = 0x4000
 	}
-	return Symbol(kindMask | startMask | base), nil
+	return Symbol(kindMask | startMask | uint16(base)), nil
 }
 
 func (s Symbol) Byte() []byte {
@@ -105,37 +112,42 @@ func (s Symbol) isTerminal() bool {
 	return !s.isNonTerminal()
 }
 
-func (s Symbol) describe() (symbolKind, bool, bool, uint16) {
+func (s Symbol) num() SymbolNum {
+	_, _, _, base := s.describe()
+	return base
+}
+
+func (s Symbol) describe() (symbolKind, bool, bool, SymbolNum) {
 	kind := symbolKindNonTerminal
-	if uint16(s)&0x8000 > 0 {
+	if s&0x8000 > 0 {
 		kind = symbolKindTerminal
 	}
 	isStart := false
 	isEOF := false
-	if uint16(s)&0x4000 > 0 {
+	if s&0x4000 > 0 {
 		if kind == symbolKindNonTerminal {
 			isStart = true
 		} else {
 			isEOF = true
 		}
 	}
-	base := uint16(s) & 0x3fff
+	base := SymbolNum(s & 0x3fff)
 	return kind, isStart, isEOF, base
 }
 
 type SymbolTable struct {
 	text2Sym map[string]Symbol
 	sym2Text map[Symbol]string
-	nsymBase uint16
-	tsymBase uint16
+	nsymBase SymbolNum
+	tsymBase SymbolNum
 }
 
 func newSymbolTable() *SymbolTable {
 	return &SymbolTable{
 		text2Sym: map[string]Symbol{},
 		sym2Text: map[Symbol]string{},
-		nsymBase: symbolBaseMin,
-		tsymBase: symbolBaseMin,
+		nsymBase: nonTerminalSymbolNumMin,
+		tsymBase: terminalSymbolNumMin,
 	}
 }
 
@@ -179,6 +191,20 @@ func (t *SymbolTable) registerTerminalSymbol(text string) (Symbol, error) {
 	t.text2Sym[text] = sym
 	t.sym2Text[sym] = text
 	return sym, nil
+}
+
+func (t *SymbolTable) getNumOfTerminalSymbols() int {
+	if t.tsymBase == terminalSymbolNumMin {
+		return 0
+	}
+	return t.tsymBase.Int()
+}
+
+func (t *SymbolTable) getNumOfNonTerminalSymbols() int {
+	if t.nsymBase == nonTerminalSymbolNumMin {
+		return 0
+	}
+	return t.nsymBase.Int()
 }
 
 func (t *SymbolTable) ToSymbol(text string) (Symbol, bool) {

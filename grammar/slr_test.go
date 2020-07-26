@@ -2,6 +2,7 @@ package grammar
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -36,7 +37,9 @@ func TestGenSLRParsingTable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ptab, err := genSLRParsingTable(automaton, gram.ProductionSet, follow)
+	numOfTSyms := gram.SymbolTable.getNumOfTerminalSymbols()
+	numOfNSyms := gram.SymbolTable.getNumOfNonTerminalSymbols()
+	ptab, err := genSLRParsingTable(automaton, gram.ProductionSet, follow, numOfTSyms, numOfNSyms)
 	if err != nil {
 		t.Fatalf("failed to create a SLR parsing table: %v", err)
 	}
@@ -344,65 +347,88 @@ func TestGenSLRParsingTable(t *testing.T) {
 				t.Fatalf("state was not found; state: #%v", 0)
 			}
 
-			actEntries := ptab.Action[state.Num]
-			if len(actEntries) != len(eState.acts) {
-				t.Errorf("number of action entries is mismatched; want: %v, got: %v", len(eState.acts), len(actEntries))
-			}
-			for _, act := range actEntries {
-				eAct, ok := eState.acts[act.Symbol]
-				if !ok {
-					t.Fatalf("unknown action entry: %+v", act)
+			// ACTION
+			{
+				nonEmptyEntries := map[SymbolNum]struct{}{}
+				for eSym, eAct := range eState.acts {
+					nonEmptyEntries[eSym.num()] = struct{}{}
+
+					ty, stateNum, prodNum := ptab.getAction(state.Num, eSym.num())
+					if ty != eAct.ty {
+						t.Fatalf("action type is mismatched; want: %v, got: %v", eAct.ty, ty)
+					}
+					switch eAct.ty {
+					case ActionTypeShift:
+						eNextState, err := newKernel(eAct.nextState)
+						if err != nil {
+							t.Fatal(err)
+						}
+						nextState := findStateByNum(automaton.states, stateNum)
+						if nextState == nil {
+							t.Fatalf("state was not found; state: #%v", stateNum)
+						}
+						if nextState.ID != eNextState.ID {
+							t.Fatalf("next state is mismatched; symbol: %v, want: %v, got: %v", eSym, eNextState.ID, nextState.ID)
+						}
+					case ActionTypeReduce:
+						prod := findProductionByNum(gram.ProductionSet, prodNum)
+						if prod == nil {
+							t.Fatalf("production was not found; production: #%v", prodNum)
+						}
+						if prod.id != eAct.production.id {
+							t.Fatalf("production is mismatched; symbol: %v, want: %v, got: %v", eSym, eAct.production.id, prod.id)
+						}
+					}
 				}
-				if act.ActionType != eAct.ty {
-					t.Fatalf("action type is mismatched; want: %v, got: %v", eAct.ty, act.ActionType)
-				}
-				switch act.ActionType {
-				case ActionTypeShift:
-					eNextState, err := newKernel(eAct.nextState)
-					if err != nil {
-						t.Fatal(err)
+				numOfTSyms := gram.SymbolTable.getNumOfTerminalSymbols()
+				for symNum := 0; symNum < numOfTSyms; symNum++ {
+					if _, checked := nonEmptyEntries[SymbolNum(symNum)]; checked {
+						continue
 					}
-					nextState := findStateByNum(automaton.states, act.State)
-					if nextState == nil {
-						t.Fatalf("state was not found; state: #%v", act.State)
-					}
-					if nextState.ID != eNextState.ID {
-						t.Fatalf("next state is mismatched; symbol: %v, want: %v, got: %v", act.Symbol, eNextState.ID, nextState.ID)
-					}
-				case ActionTypeReduce:
-					prod := findProductionByNum(gram.ProductionSet, act.Production)
-					if prod == nil {
-						t.Fatalf("production was not found; production: #%v", act.Production)
-					}
-					if prod.id != eAct.production.id {
-						t.Fatalf("production is mismatched; symbol: %v, want: %v, got: %v", act.Symbol, eAct.production.id, prod.id)
+					ty, stateNum, prodNum := ptab.getAction(state.Num, SymbolNum(symNum))
+					if ty != ActionTypeError {
+						t.Errorf("unexpected ACTION entry; state: #%v, symbol: #%v, action type: %v, next state: #%v, prodction: #%v", state.Num, symNum, ty, stateNum, prodNum)
 					}
 				}
 			}
 
-			goToEntries := ptab.GoTo[state.Num]
-			if len(goToEntries) != len(eState.goTos) {
-				t.Errorf("number of goto entries is mismatched; want: %v, got: %v", len(eState.goTos), len(goToEntries))
-			}
-			for _, goTo := range goToEntries {
-				eGoTo, ok := eState.goTos[goTo.Symbol]
-				if !ok {
-					t.Fatalf("unknown goto entry: %+v", goTo)
+			// GOTO
+			{
+				nonEmptyEntries := map[SymbolNum]struct{}{}
+				for eSym, eGoTo := range eState.goTos {
+					nonEmptyEntries[eSym.num()] = struct{}{}
+
+					eNextState, err := newKernel(eGoTo)
+					if err != nil {
+						t.Fatal(err)
+					}
+					ty, stateNum := ptab.getGoTo(state.Num, eSym.num())
+					if ty != GoToTypeRegistered {
+						t.Fatalf("GOTO entry was not found; state: #%v, symbol: #%v", state.Num, eSym)
+					}
+					nextState := findStateByNum(automaton.states, stateNum)
+					if nextState == nil {
+						t.Fatalf("state was not found; state: #%v", stateNum)
+					}
+					if nextState.ID != eNextState.ID {
+						t.Fatalf("next state is mismatched; symbol: %v, want: %v, got: %v", eSym, eNextState.ID, nextState.ID)
+					}
 				}
-				eNextState, err := newKernel(eGoTo)
-				if err != nil {
-					t.Fatal(err)
-				}
-				nextState := findStateByNum(automaton.states, goTo.State)
-				if nextState == nil {
-					t.Fatalf("state was not found; state: #%v", goTo.State)
-				}
-				if nextState.ID != eNextState.ID {
-					t.Fatalf("next state is mismatched; symbol: %v, want: %v, got: %v", goTo.Symbol, eNextState.ID, nextState.ID)
+				numOfNSyms := gram.SymbolTable.getNumOfNonTerminalSymbols()
+				for symNum := 0; symNum < numOfNSyms; symNum++ {
+					if _, checked := nonEmptyEntries[SymbolNum(symNum)]; checked {
+						continue
+					}
+					ty, _ := ptab.getGoTo(state.Num, SymbolNum(symNum))
+					if ty != GoToTypeError {
+						t.Errorf("unexpected GOTO entry; state: #%v, symbol: #%v", state.Num, symNum)
+					}
 				}
 			}
 		})
 	}
+
+	printParsingTable(os.Stdout, ptab)
 }
 
 type testActionEntry struct {

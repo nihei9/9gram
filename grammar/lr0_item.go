@@ -154,6 +154,10 @@ type StateNum int
 
 const stateNumInitial = StateNum(0)
 
+func (n StateNum) Int() int {
+	return int(n)
+}
+
 func (n StateNum) String() string {
 	return strconv.Itoa(int(n))
 }

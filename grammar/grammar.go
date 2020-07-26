@@ -122,7 +122,9 @@ func GenTable(gram *Grammar) (*Table, error) {
 		return nil, fmt.Errorf("failed to create a LR0 automaton: %v", err)
 	}
 
-	ptab, err := genSLRParsingTable(automaton, gram.ProductionSet, flw)
+	numOfTSyms := gram.SymbolTable.getNumOfTerminalSymbols()
+	numOfNSyms := gram.SymbolTable.getNumOfNonTerminalSymbols()
+	ptab, err := genSLRParsingTable(automaton, gram.ProductionSet, flw, numOfTSyms, numOfNSyms)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a SLR parsing table: %v", err)
 	}
