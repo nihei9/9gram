@@ -220,3 +220,27 @@ func (t *SymbolTable) ToText(sym Symbol) (string, bool) {
 	}
 	return "", false
 }
+
+func (t *SymbolTable) ToTextFromNumT(num SymbolNum) (string, error) {
+	sym, err := newSymbol(symbolKindTerminal, false, num)
+	if err != nil {
+		return "", err
+	}
+	text, ok := t.ToText(sym)
+	if !ok {
+		return "", fmt.Errorf("text was not found; symbol: %v", sym)
+	}
+	return text, nil
+}
+
+func (t *SymbolTable) ToTextFromNumN(num SymbolNum) (string, error) {
+	sym, err := newSymbol(symbolKindNonTerminal, false, num)
+	if err != nil {
+		return "", err
+	}
+	text, ok := t.ToText(sym)
+	if !ok {
+		return "", fmt.Errorf("text was not found; symbol: %v", sym)
+	}
+	return text, nil
+}

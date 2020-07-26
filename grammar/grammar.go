@@ -1,6 +1,7 @@
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/nihei9/9gram/parser"
@@ -31,12 +32,12 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 		if !ok {
 			return nil, fmt.Errorf("a node of the AST does not have a text representation; node: %#v", lhsAST)
 		}
-		startSym, err := symTab.registerNonTerminalSymbol(startText)
+		augmentedStartText := fmt.Sprintf("%s'", startText)
+		augmentedStartSym, err := symTab.registerStartSymbol(augmentedStartText)
 		if err != nil {
 			return nil, err
 		}
-		augmentedStartText := fmt.Sprintf("%s'", startText)
-		augmentedStartSym, err := symTab.registerStartSymbol(augmentedStartText)
+		startSym, err := symTab.registerNonTerminalSymbol(startText)
 		if err != nil {
 			return nil, err
 		}
@@ -135,4 +136,54 @@ func GenTable(gram *Grammar) (*Table, error) {
 		Follow:       flw,
 		First:        fst,
 	}, nil
+}
+
+func GenJSON(gram *Grammar, tab *Table) ([]byte, error) {
+	prods := make([]int, len(gram.ProductionSet.getAll())+1)
+	for _, p := range gram.ProductionSet.getAll() {
+		prods[p.num] = p.rhsLen
+	}
+
+	tsymCount := gram.SymbolTable.getNumOfTerminalSymbols()
+	tsyms := make([]string, tsymCount)
+	for num := terminalSymbolNumMin.Int(); num < tsymCount; num++ {
+		text, err := gram.SymbolTable.ToTextFromNumT(SymbolNum(num))
+		if err != nil {
+			return nil, err
+		}
+		tsyms[num] = text
+	}
+
+	nsymCount := gram.SymbolTable.getNumOfNonTerminalSymbols()
+	nsyms := make([]string, nsymCount)
+	// nonTerminalSymbolNumMin represents the augmented start symbol.
+	for num := nonTerminalSymbolNumMin.Int() + 1; num < nsymCount; num++ {
+		text, err := gram.SymbolTable.ToTextFromNumN(SymbolNum(num))
+		if err != nil {
+			return nil, err
+		}
+		nsyms[num] = text
+	}
+
+	return json.Marshal(struct {
+		Action                 []actionEntry `json:"action"`
+		GoTo                   []goToEntry   `json:"goto"`
+		StateCount             int           `json:"state_count"`
+		InitialState           StateNum      `json:"initial_state"`
+		Produtions             []int         `json:"productions"`
+		TerminalSymbols        []string      `json:"terminal_symbols"`
+		TerminalSymbolCount    int           `json:"terminal_symbol_count"`
+		NonTerminalSymbols     []string      `json:"non_terminal_symbols"`
+		NonTerminalSymbolCount int           `json:"non_terminal_symbol_count"`
+	}{
+		Action:                 tab.LR.actionTable,
+		GoTo:                   tab.LR.goToTable,
+		StateCount:             len(tab.LR0Automaton.states),
+		InitialState:           tab.LR.InitialState,
+		Produtions:             prods,
+		TerminalSymbols:        tsyms,
+		TerminalSymbolCount:    tsymCount,
+		NonTerminalSymbols:     nsyms,
+		NonTerminalSymbolCount: nsymCount,
+	})
 }
