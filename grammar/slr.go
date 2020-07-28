@@ -86,7 +86,7 @@ func (t *ParsingTable) getGoTo(state StateNum, sym SymbolNum) (GoToType, StateNu
 }
 
 func (t *ParsingTable) writeShiftAction(state StateNum, sym Symbol, nextState StateNum) error {
-	pos := state.Int()*t.numOfTSymbols + sym.num().Int()
+	pos := state.Int()*t.numOfTSymbols + sym.Num().Int()
 	act := t.actionTable[pos]
 	if !act.isEmpty() {
 		ty, _, _ := act.describe()
@@ -100,7 +100,7 @@ func (t *ParsingTable) writeShiftAction(state StateNum, sym Symbol, nextState St
 }
 
 func (t *ParsingTable) writeReduceAction(state StateNum, sym Symbol, prod ProductionNum) error {
-	pos := state.Int()*t.numOfTSymbols + sym.num().Int()
+	pos := state.Int()*t.numOfTSymbols + sym.Num().Int()
 	act := t.actionTable[pos]
 	if !act.isEmpty() {
 		ty, _, p := act.describe()
@@ -115,7 +115,7 @@ func (t *ParsingTable) writeReduceAction(state StateNum, sym Symbol, prod Produc
 }
 
 func (t *ParsingTable) writeGoTo(state StateNum, sym Symbol, nextState StateNum) {
-	pos := state.Int()*t.numOfNSymbols + sym.num().Int()
+	pos := state.Int()*t.numOfNSymbols + sym.Num().Int()
 	t.goToTable[pos] = newGoToEntry(nextState)
 }
 
@@ -156,7 +156,7 @@ func genSLRParsingTable(automaton *LR0Automaton, prods *productionSet, follow *F
 				}
 			}
 			if flw.eof {
-				err := ptab.writeReduceAction(state.Num, symbolEOF, prod.num)
+				err := ptab.writeReduceAction(state.Num, SymbolEOF, prod.num)
 				if err != nil {
 					return nil, err
 				}

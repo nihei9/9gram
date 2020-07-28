@@ -62,8 +62,8 @@ func TestSymbol(t *testing.T) {
 		})
 	}
 
-	t.Run("symbolEOF is the EOF symbol", func(t *testing.T) {
-		testSymbolProperty(t, symbolEOF, false, false, true, false, true)
+	t.Run("SymbolEOF is the EOF symbol", func(t *testing.T) {
+		testSymbolProperty(t, SymbolEOF, false, false, true, false, true)
 	})
 
 	t.Run("symbolNil is the nil symbol", func(t *testing.T) {

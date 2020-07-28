@@ -139,9 +139,11 @@ func GenTable(gram *Grammar) (*Table, error) {
 }
 
 func GenJSON(gram *Grammar, tab *Table) ([]byte, error) {
-	prods := make([]int, len(gram.ProductionSet.getAll())+1)
+	headSyms := make([]int, len(gram.ProductionSet.getAll())+1)
+	altSymCounts := make([]int, len(gram.ProductionSet.getAll())+1)
 	for _, p := range gram.ProductionSet.getAll() {
-		prods[p.num] = p.rhsLen
+		headSyms[p.num] = p.lhs.Num().Int()
+		altSymCounts[p.num] = p.rhsLen
 	}
 
 	tsymCount := gram.SymbolTable.getNumOfTerminalSymbols()
@@ -166,24 +168,30 @@ func GenJSON(gram *Grammar, tab *Table) ([]byte, error) {
 	}
 
 	return json.Marshal(struct {
-		Action                 []actionEntry `json:"action"`
-		GoTo                   []goToEntry   `json:"goto"`
-		StateCount             int           `json:"state_count"`
-		InitialState           StateNum      `json:"initial_state"`
-		Produtions             []int         `json:"productions"`
-		TerminalSymbols        []string      `json:"terminal_symbols"`
-		TerminalSymbolCount    int           `json:"terminal_symbol_count"`
-		NonTerminalSymbols     []string      `json:"non_terminal_symbols"`
-		NonTerminalSymbolCount int           `json:"non_terminal_symbol_count"`
+		Action                  []actionEntry `json:"action"`
+		GoTo                    []goToEntry   `json:"goto"`
+		StateCount              int           `json:"state_count"`
+		InitialState            StateNum      `json:"initial_state"`
+		StartProduction         int           `json:"start_production"`
+		HeadSymbols             []int         `json:"head_symbols"`
+		AlternativeSymbolCounts []int         `json:"alternative_symbol_counts"`
+		EOFSymbol               int           `json:"eof_symbol"`
+		TerminalSymbols         []string      `json:"terminal_symbols"`
+		TerminalSymbolCount     int           `json:"terminal_symbol_count"`
+		NonTerminalSymbols      []string      `json:"non_terminal_symbols"`
+		NonTerminalSymbolCount  int           `json:"non_terminal_symbol_count"`
 	}{
-		Action:                 tab.LR.actionTable,
-		GoTo:                   tab.LR.goToTable,
-		StateCount:             len(tab.LR0Automaton.states),
-		InitialState:           tab.LR.InitialState,
-		Produtions:             prods,
-		TerminalSymbols:        tsyms,
-		TerminalSymbolCount:    tsymCount,
-		NonTerminalSymbols:     nsyms,
-		NonTerminalSymbolCount: nsymCount,
+		Action:                  tab.LR.actionTable,
+		GoTo:                    tab.LR.goToTable,
+		StateCount:              len(tab.LR0Automaton.states),
+		InitialState:            tab.LR.InitialState,
+		StartProduction:         ProductionNumStart.Int(),
+		HeadSymbols:             headSyms,
+		AlternativeSymbolCounts: altSymCounts,
+		EOFSymbol:               SymbolEOF.Num().Int(),
+		TerminalSymbols:         tsyms,
+		TerminalSymbolCount:     tsymCount,
+		NonTerminalSymbols:      nsyms,
+		NonTerminalSymbolCount:  nsymCount,
 	})
 }

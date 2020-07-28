@@ -22,9 +22,17 @@ func genProductionID(lhs Symbol, rhs []Symbol) ProductionID {
 
 type ProductionNum uint16
 
-// Avoid using 0 as a production number.
-// In ACTION table, 0 means an empty entry.
-const productionNumMin = ProductionNum(1)
+const (
+	ProductionNumStart = ProductionNum(1)
+
+	// Avoid using 0 as a production number.
+	// In ACTION table, 0 means an empty entry.
+	productionNumMin = ProductionNum(2)
+)
+
+func (n ProductionNum) Int() int {
+	return int(n)
+}
 
 type production struct {
 	id     ProductionID
@@ -81,8 +89,12 @@ func (ps *productionSet) append(prod *production) bool {
 		return false
 	}
 
-	prod.num = ps.num
-	ps.num += 1
+	if prod.lhs.isStart() {
+		prod.num = ProductionNumStart
+	} else {
+		prod.num = ps.num
+		ps.num += 1
+	}
 
 	if prods, ok := ps.lhs2Prods[prod.lhs]; ok {
 		ps.lhs2Prods[prod.lhs] = append(prods, prod)

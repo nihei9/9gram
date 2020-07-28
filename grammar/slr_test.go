@@ -124,7 +124,7 @@ func TestGenSLRParsingTable(t *testing.T) {
 					ty:        ActionTypeShift,
 					nextState: expectedKernels[6],
 				},
-				symbolEOF: {
+				SymbolEOF: {
 					ty:         ActionTypeReduce,
 					production: genProd("e'", "e"),
 				},
@@ -145,7 +145,7 @@ func TestGenSLRParsingTable(t *testing.T) {
 					ty:         ActionTypeReduce,
 					production: genProd("e", "t"),
 				},
-				symbolEOF: {
+				SymbolEOF: {
 					ty:         ActionTypeReduce,
 					production: genProd("e", "t"),
 				},
@@ -166,7 +166,7 @@ func TestGenSLRParsingTable(t *testing.T) {
 					ty:         ActionTypeReduce,
 					production: genProd("t", "f"),
 				},
-				symbolEOF: {
+				SymbolEOF: {
 					ty:         ActionTypeReduce,
 					production: genProd("t", "f"),
 				},
@@ -205,7 +205,7 @@ func TestGenSLRParsingTable(t *testing.T) {
 					ty:         ActionTypeReduce,
 					production: genProd("f", "NUMBER"),
 				},
-				symbolEOF: {
+				SymbolEOF: {
 					ty:         ActionTypeReduce,
 					production: genProd("f", "NUMBER"),
 				},
@@ -272,7 +272,7 @@ func TestGenSLRParsingTable(t *testing.T) {
 					ty:         ActionTypeReduce,
 					production: genProd("e", "e", "ADD", "t"),
 				},
-				symbolEOF: {
+				SymbolEOF: {
 					ty:         ActionTypeReduce,
 					production: genProd("e", "e", "ADD", "t"),
 				},
@@ -293,7 +293,7 @@ func TestGenSLRParsingTable(t *testing.T) {
 					ty:         ActionTypeReduce,
 					production: genProd("t", "t", "MUL", "f"),
 				},
-				symbolEOF: {
+				SymbolEOF: {
 					ty:         ActionTypeReduce,
 					production: genProd("t", "t", "MUL", "f"),
 				},
@@ -314,7 +314,7 @@ func TestGenSLRParsingTable(t *testing.T) {
 					ty:         ActionTypeReduce,
 					production: genProd("f", "LPAREN", "e", "RPAREN"),
 				},
-				symbolEOF: {
+				SymbolEOF: {
 					ty:         ActionTypeReduce,
 					production: genProd("f", "LPAREN", "e", "RPAREN"),
 				},
@@ -351,9 +351,9 @@ func TestGenSLRParsingTable(t *testing.T) {
 			{
 				nonEmptyEntries := map[SymbolNum]struct{}{}
 				for eSym, eAct := range eState.acts {
-					nonEmptyEntries[eSym.num()] = struct{}{}
+					nonEmptyEntries[eSym.Num()] = struct{}{}
 
-					ty, stateNum, prodNum := ptab.getAction(state.Num, eSym.num())
+					ty, stateNum, prodNum := ptab.getAction(state.Num, eSym.Num())
 					if ty != eAct.ty {
 						t.Fatalf("action type is mismatched; want: %v, got: %v", eAct.ty, ty)
 					}
@@ -396,13 +396,13 @@ func TestGenSLRParsingTable(t *testing.T) {
 			{
 				nonEmptyEntries := map[SymbolNum]struct{}{}
 				for eSym, eGoTo := range eState.goTos {
-					nonEmptyEntries[eSym.num()] = struct{}{}
+					nonEmptyEntries[eSym.Num()] = struct{}{}
 
 					eNextState, err := newKernel(eGoTo)
 					if err != nil {
 						t.Fatal(err)
 					}
-					ty, stateNum := ptab.getGoTo(state.Num, eSym.num())
+					ty, stateNum := ptab.getGoTo(state.Num, eSym.Num())
 					if ty != GoToTypeRegistered {
 						t.Fatalf("GOTO entry was not found; state: #%v, symbol: #%v", state.Num, eSym)
 					}

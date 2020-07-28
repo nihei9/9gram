@@ -43,7 +43,7 @@ func (s Symbol) String() string {
 
 const (
 	symbolNil = Symbol(0)      // 0000 0000 0000 0000
-	symbolEOF = Symbol(0xc001) // 1100 0000 0000 0001: The EOF symbol is treated as a terminal symbol.
+	SymbolEOF = Symbol(0xc001) // 1100 0000 0000 0001: The EOF symbol is treated as a terminal symbol.
 
 	terminalSymbolNumMin    = SymbolNum(2) // The number 1 is used by the EOF symbol.
 	nonTerminalSymbolNumMin = SymbolNum(1)
@@ -64,6 +64,11 @@ func newSymbol(kind symbolKind, isStart bool, base SymbolNum) (Symbol, error) {
 		startMask = 0x4000
 	}
 	return Symbol(kindMask | startMask | uint16(base)), nil
+}
+
+func (s Symbol) Num() SymbolNum {
+	_, _, _, base := s.describe()
+	return base
 }
 
 func (s Symbol) Byte() []byte {
@@ -110,11 +115,6 @@ func (s Symbol) isTerminal() bool {
 		return false
 	}
 	return !s.isNonTerminal()
-}
-
-func (s Symbol) num() SymbolNum {
-	_, _, _, base := s.describe()
-	return base
 }
 
 func (s Symbol) describe() (symbolKind, bool, bool, SymbolNum) {
