@@ -2,6 +2,8 @@ package grammar
 
 import (
 	"fmt"
+	"io"
+	"sort"
 )
 
 type symbolKind string
@@ -243,4 +245,46 @@ func (t *SymbolTable) ToTextFromNumN(num SymbolNum) (string, error) {
 		return "", fmt.Errorf("text was not found; symbol: %v", sym)
 	}
 	return text, nil
+}
+
+func PrintSymbolTable(w io.Writer, symTab *SymbolTable) {
+	if w == nil {
+		return
+	}
+
+	var nsyms []Symbol
+	var tsyms []Symbol
+	for sym := range symTab.sym2Text {
+		if sym.isNonTerminal() {
+			nsyms = append(nsyms, sym)
+		} else {
+			tsyms = append(tsyms, sym)
+		}
+	}
+	sort.Slice(nsyms, func(i, j int) bool {
+		return nsyms[i].Num() < nsyms[j].Num()
+	})
+	sort.Slice(tsyms, func(i, j int) bool {
+		return tsyms[i].Num() < tsyms[j].Num()
+	})
+
+	fmt.Fprintln(w, "Non-Terminal Symbols:")
+	for _, sym := range nsyms {
+		text, ok := symTab.ToText(sym)
+		if !ok {
+			fmt.Fprintf(w, "  %v(!): %v\n", sym, text)
+		} else {
+			fmt.Fprintf(w, "  %v: %v\n", sym, text)
+		}
+	}
+	fmt.Fprintln(w, "Terminal Symbols:")
+	fmt.Fprintf(w, "  %v: <eof>\n", SymbolEOF)
+	for _, sym := range tsyms {
+		text, ok := symTab.ToText(sym)
+		if !ok {
+			fmt.Fprintf(w, "  %v(!): %v\n", sym, text)
+		} else {
+			fmt.Fprintf(w, "  %v: %v\n", sym, text)
+		}
+	}
 }

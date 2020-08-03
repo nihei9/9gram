@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"sort"
 )
 
 type ProductionID [32]byte
@@ -122,4 +124,34 @@ func (ps *productionSet) findByLHS(lhs Symbol) ([]*production, bool) {
 
 func (ps *productionSet) getAll() map[ProductionID]*production {
 	return ps.id2Prod
+}
+
+func PrintProductionSet(w io.Writer, prods *productionSet, symTab *SymbolTable) {
+	if w == nil {
+		return
+	}
+
+	var ps []*production
+	for _, p := range prods.getAll() {
+		ps = append(ps, p)
+	}
+	sort.Slice(ps, func(i, j int) bool {
+		return ps[i].num < ps[j].num
+	})
+
+	for _, p := range ps {
+		lhsText, ok := symTab.ToText(p.lhs)
+		if !ok {
+			lhsText = "<Symbol Not Found>"
+		}
+		fmt.Fprintf(w, "#%v: %v →", p.num, lhsText)
+		for _, rhsSym := range p.rhs {
+			rhsText, ok := symTab.ToText(rhsSym)
+			if !ok {
+				rhsText = "<Symbol Not Found>"
+			}
+			fmt.Fprintf(w, "　%v", rhsText)
+		}
+		fmt.Fprintf(w, "\n")
+	}
 }

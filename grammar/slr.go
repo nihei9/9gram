@@ -167,7 +167,11 @@ func genSLRParsingTable(automaton *LR0Automaton, prods *productionSet, follow *F
 	return ptab, nil
 }
 
-func printParsingTable(w io.Writer, ptab *ParsingTable) {
+func PrintParsingTable(w io.Writer, ptab *ParsingTable) {
+	if w == nil {
+		return
+	}
+
 	fmt.Fprintf(w, "Action:\n")
 	for stateNum := 0; stateNum < ptab.numOfStates; stateNum++ {
 		for symNum := 0; symNum < ptab.numOfTSymbols; symNum++ {

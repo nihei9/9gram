@@ -242,7 +242,7 @@ func TestGenLR0Automaton(t *testing.T) {
 		})
 	}
 
-	printLR0Automaton(os.Stdout, automaton, gram.ProductionSet, gram.SymbolTable)
+	PrintLR0Automaton(os.Stdout, automaton, gram.ProductionSet, gram.SymbolTable)
 }
 
 type expectedLR0State struct {
