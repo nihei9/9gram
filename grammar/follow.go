@@ -2,6 +2,8 @@ package grammar
 
 import (
 	"fmt"
+	"io"
+	"sort"
 )
 
 type FollowEntry struct {
@@ -158,4 +160,45 @@ func genFollowEntry(cc *followComContext, sym Symbol) (*FollowEntry, error) {
 	cc.follow.put(entry, sym)
 
 	return entry, nil
+}
+
+func PrintFollow(w io.Writer, follow *Follow, symTab *SymbolTable) {
+	if w == nil {
+		return
+	}
+
+	var nsyms []Symbol
+	for nsym := range follow.set {
+		nsyms = append(nsyms, nsym)
+	}
+	sort.Slice(nsyms, func(i, j int) bool {
+		return nsyms[i].Num() < nsyms[j].Num()
+	})
+
+	for _, nsym := range nsyms {
+		nsymText, ok := symTab.ToText(nsym)
+		if !ok {
+			nsymText = "<Symbol Not Found>"
+		}
+		e := follow.Get(nsym)
+		fmt.Fprintf(w, "%v:", nsymText)
+		if e.eof {
+			fmt.Fprintf(w, " <eof>")
+		}
+		var tsyms []Symbol
+		for tsym := range e.symbols {
+			tsyms = append(tsyms, tsym)
+		}
+		sort.Slice(tsyms, func(i, j int) bool {
+			return tsyms[i].Num() < tsyms[j].Num()
+		})
+		for _, tsym := range tsyms {
+			tsymText, ok := symTab.ToText(tsym)
+			if !ok {
+				tsymText = "<Symbol Not Found>"
+			}
+			fmt.Fprintf(w, " %v", tsymText)
+		}
+		fmt.Fprintf(w, "\n")
+	}
 }

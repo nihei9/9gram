@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/nihei9/9gram/log"
 	"github.com/nihei9/9gram/parser"
 )
 
@@ -20,6 +21,15 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 		SymbolTable:   symTab,
 		ProductionSet: prods,
 	}
+
+	defer func() {
+		log.Log("--- Symbol Table starts")
+		PrintSymbolTable(log.GetWriter(), gram.SymbolTable)
+		log.Log("--- Symbol Table ends")
+		log.Log("--- Production Set starts")
+		PrintProductionSet(log.GetWriter(), gram.ProductionSet, gram.SymbolTable)
+		log.Log("--- Production Set ends")
+	}()
 
 	// Register the augmented start symbol with the symbol table and generate its production
 	for _, ast := range root.Children {
@@ -117,11 +127,17 @@ func GenTable(gram *Grammar) (*Table, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a FOLLOW set: %v", err)
 	}
+	log.Log("--- Follow starts")
+	PrintFollow(log.GetWriter(), flw, gram.SymbolTable)
+	log.Log("--- Follow ends")
 
 	automaton, err := genLR0Automaton(gram.ProductionSet, gram.AugmentedStartSymbol)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a LR0 automaton: %v", err)
 	}
+	log.Log("--- LR0 Automaton starts")
+	PrintLR0Automaton(log.GetWriter(), automaton, gram.ProductionSet, gram.SymbolTable)
+	log.Log("--- LR0 Automaton ends")
 
 	numOfTSyms := gram.SymbolTable.getNumOfTerminalSymbols()
 	numOfNSyms := gram.SymbolTable.getNumOfNonTerminalSymbols()
@@ -129,6 +145,9 @@ func GenTable(gram *Grammar) (*Table, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a SLR parsing table: %v", err)
 	}
+	log.Log("--- Parsing Table starts")
+	PrintParsingTable(log.GetWriter(), ptab)
+	log.Log("--- ParsingTable ends")
 
 	return &Table{
 		LR:           ptab,

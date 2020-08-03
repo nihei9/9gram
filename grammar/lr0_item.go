@@ -3,7 +3,6 @@ package grammar
 import (
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"sort"
@@ -14,7 +13,7 @@ import (
 type LR0ItemID [32]byte
 
 func (id LR0ItemID) String() string {
-	return hex.EncodeToString(id[:])
+	return fmt.Sprintf("%x", id.num())
 }
 
 func (id LR0ItemID) num() uint32 {
@@ -102,7 +101,7 @@ func newLR0Item(prod *production, dot int) (*LR0Item, error) {
 type KernelID [32]byte
 
 func (id KernelID) String() string {
-	return hex.EncodeToString(id[:])
+	return fmt.Sprintf("%x", binary.LittleEndian.Uint32(id[:]))
 }
 
 type Kernel struct {
@@ -345,13 +344,16 @@ func genNeighbourKernels(items []*LR0Item, prods *productionSet) ([]*neighbourKe
 	return kernels, nil
 }
 
-func printLR0Automaton(w io.Writer, automaton *LR0Automaton, prods *productionSet, symTab *SymbolTable) {
+func PrintLR0Automaton(w io.Writer, automaton *LR0Automaton, prods *productionSet, symTab *SymbolTable) {
+	if w == nil {
+		return
+	}
+
 	sortedStates := make([]*LR0State, len(automaton.states))
 	for _, state := range automaton.states {
 		sortedStates[state.Num] = state
 	}
 
-	w.Write([]byte("LR0 Automaton:\n"))
 	for _, state := range sortedStates {
 		var b strings.Builder
 		if state.ID == automaton.initialState {

@@ -428,7 +428,7 @@ func TestGenSLRParsingTable(t *testing.T) {
 		})
 	}
 
-	printParsingTable(os.Stdout, ptab)
+	PrintParsingTable(os.Stdout, ptab)
 }
 
 type testActionEntry struct {

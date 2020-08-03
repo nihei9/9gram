@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/nihei9/9gram/grammar"
+	"github.com/nihei9/9gram/log"
 	"github.com/nihei9/9gram/parser"
 )
 
@@ -40,27 +41,38 @@ func run(args []string) error {
 		src = os.Stdin
 	}
 
+	err := log.Init("9gram.log")
+	if err != nil {
+		return err
+	}
+	defer log.Close()
+
 	psr, err := parser.NewParser(src)
 	if err != nil {
+		log.Log("Failed to craete a parser: %v", err)
 		return err
 	}
 	ast, err := psr.Parse()
 	if err != nil {
+		log.Log("Failed to parse: %v", err)
 		return err
 	}
 
 	gram, err := grammar.GenGrammar(ast)
 	if err != nil {
+		log.Log("Failed to generate a grammar information: %v", err)
 		return err
 	}
 
 	tab, err := grammar.GenTable(gram)
 	if err != nil {
+		log.Log("Failed to generate a parsing table: %v", err)
 		return err
 	}
 
 	d, err := grammar.GenJSON(gram, tab)
 	if err != nil {
+		log.Log("Failed to generate a JSON output: %v", err)
 		return err
 	}
 	fmt.Println(string(d))
