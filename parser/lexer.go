@@ -15,6 +15,7 @@ const (
 	tokenKindVBar      = tokenKind("|")
 	tokenKindSemicolon = tokenKind(";")
 	tokenKindID        = tokenKind("id")
+	tokenKindPattern   = tokenKind("pattern")
 	tokenKindEOF       = tokenKind("eof")
 	tokenKindUnknown   = tokenKind("unknown")
 )
@@ -56,6 +57,14 @@ func newSymbolToken(pos Position, kind tokenKind) *token {
 func newIDToken(pos Position, text string) *token {
 	return &token{
 		kind: tokenKindID,
+		pos:  pos,
+		text: text,
+	}
+}
+
+func newPatternToken(pos Position, text string) *token {
+	return &token{
+		kind: tokenKindPattern,
 		pos:  pos,
 		text: text,
 	}
@@ -122,6 +131,12 @@ func (l *lexer) next() (*token, error) {
 			return nil, err
 		}
 		return newIDToken(pos, text), nil
+	case c == '"':
+		text, err := l.readPattern()
+		if err != nil {
+			return nil, err
+		}
+		return newPatternToken(pos, text), nil
 	}
 
 	text, err := l.readUnknown()
@@ -188,6 +203,28 @@ func isIDHeadChar(c rune) bool {
 	return c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c == '_'
 }
 
+func (l *lexer) readPattern() (string, error) {
+	var b strings.Builder
+	for {
+		c, eof, err := l.read()
+		if err != nil {
+			return "", err
+		}
+		if c == '"' {
+			break
+		}
+		if eof {
+			return "", fmt.Errorf("unclosed pattern string")
+		}
+		fmt.Fprint(&b, string(c))
+	}
+	if b.Len() <= 0 {
+		return "", fmt.Errorf("empty pattern string")
+	}
+
+	return b.String(), nil
+}
+
 func (l *lexer) readUnknown() (string, error) {
 	var b strings.Builder
 	fmt.Fprint(&b, string(l.lastChar))
@@ -217,7 +254,7 @@ func isUnknownChar(c rune) bool {
 }
 
 func isHeadChar(c rune) bool {
-	return c == ':' || c == '|' || c == ';' || isIDHeadChar(c) || isWhitespace(c)
+	return c == ':' || c == '|' || c == ';' || isIDHeadChar(c) || c == '"' || isWhitespace(c)
 }
 
 func (l *lexer) read() (rune, bool, error) {

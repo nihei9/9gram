@@ -12,6 +12,7 @@ const (
 	ASTTypeProduction  = ASTType("production")
 	ASTTypeAlternative = ASTType("alternative")
 	ASTTypeSymbol      = ASTType("symbol")
+	ASTTypePattern     = ASTType("pattern")
 )
 
 type AST struct {
@@ -23,10 +24,13 @@ type AST struct {
 }
 
 func (ast *AST) GetText() (string, bool) {
-	if ast.token == nil || ast.token.kind != tokenKindID {
+	if ast.token == nil {
 		return "", false
 	}
-	return ast.token.text, true
+	if ast.token.kind == tokenKindID || ast.token.kind == tokenKindPattern {
+		return ast.token.text, true
+	}
+	return "", false
 }
 
 func (ast *AST) appendChild(child *AST) {
@@ -123,10 +127,15 @@ func (p *parser) parseAlternative() {
 	defer p.leave()
 
 	for {
-		if !p.consume(tokenKindID) {
-			break
+		if p.consume(tokenKindID) {
+			p.as(ASTTypeSymbol)
+			continue
 		}
-		p.as(ASTTypeSymbol)
+		if p.consume(tokenKindPattern) {
+			p.as(ASTTypePattern)
+			continue
+		}
+		break
 	}
 }
 

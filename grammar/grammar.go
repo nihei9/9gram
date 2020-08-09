@@ -3,6 +3,7 @@ package grammar
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/nihei9/9gram/log"
 	"github.com/nihei9/9gram/parser"
@@ -10,15 +11,19 @@ import (
 
 type Grammar struct {
 	SymbolTable          *SymbolTable
+	Patterns             map[SymbolNum]string
 	ProductionSet        *productionSet
 	AugmentedStartSymbol Symbol
 }
 
 func GenGrammar(root *parser.AST) (*Grammar, error) {
 	symTab := newSymbolTable()
+	sym2Pat := map[SymbolNum]string{}
+	pat2Sym := map[string]Symbol{}
 	prods := newProductionSet()
 	gram := &Grammar{
 		SymbolTable:   symTab,
+		Patterns:      sym2Pat,
 		ProductionSet: prods,
 	}
 
@@ -26,6 +31,21 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 		log.Log("--- Symbol Table starts")
 		PrintSymbolTable(log.GetWriter(), gram.SymbolTable)
 		log.Log("--- Symbol Table ends")
+		log.Log("--- Patterns starts")
+		{
+			syms := []SymbolNum{}
+			for sym := range gram.Patterns {
+				syms = append(syms, sym)
+			}
+			sort.Slice(syms, func(i, j int) bool {
+				return syms[i].Int() < syms[j].Int()
+			})
+			for _, sym := range syms {
+				patText := gram.Patterns[sym]
+				log.Log("%v: %v", sym, patText)
+			}
+		}
+		log.Log("--- Patterns ends")
 		log.Log("--- Production Set starts")
 		PrintProductionSet(log.GetWriter(), gram.ProductionSet, gram.SymbolTable)
 		log.Log("--- Production Set ends")
@@ -77,6 +97,7 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 	}
 
 	// Generate productions
+	patNum := 0
 	for _, ast := range root.Children {
 		if ast.Ty != parser.ASTTypeProduction {
 			continue
@@ -86,16 +107,35 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 		lhsText, _ := lhsAST.GetText()
 		lhsSym, _ := symTab.ToSymbol(lhsText)
 
-		for i := 1; i < len(ast.Children); i++ {
-			altAST := ast.Children[i]
+		for _, altAST := range ast.Children[1:] {
 			rhsSyms := make([]Symbol, len(altAST.Children))
-			for i, symAST := range altAST.Children {
-				symText, _ := symAST.GetText()
-				sym, err := symTab.registerTerminalSymbol(symText)
-				if err != nil {
-					return nil, err
+			for i, elemAST := range altAST.Children {
+				if elemAST.Ty == parser.ASTTypePattern {
+					patText, ok := elemAST.GetText()
+					if !ok {
+						return nil, fmt.Errorf("text representation of pattern string is not found")
+					}
+					sym, ok := pat2Sym[patText]
+					if !ok {
+						symText := fmt.Sprintf("$%v", patNum)
+						patNum++
+						var err error
+						sym, err = symTab.registerTerminalSymbol(symText)
+						if err != nil {
+							return nil, err
+						}
+						pat2Sym[patText] = sym
+						sym2Pat[sym.Num()] = patText
+					}
+					rhsSyms[i] = sym
+				} else {
+					symText, _ := elemAST.GetText()
+					sym, err := symTab.registerTerminalSymbol(symText)
+					if err != nil {
+						return nil, err
+					}
+					rhsSyms[i] = sym
 				}
-				rhsSyms[i] = sym
 			}
 
 			prod, err := newProduction(lhsSym, rhsSyms)
@@ -167,12 +207,14 @@ func GenJSON(gram *Grammar, tab *Table) ([]byte, error) {
 
 	tsymCount := gram.SymbolTable.getNumOfTerminalSymbols()
 	tsyms := make([]string, tsymCount)
+	patterns := make([]string, tsymCount)
 	for num := terminalSymbolNumMin.Int(); num < tsymCount; num++ {
 		text, err := gram.SymbolTable.ToTextFromNumT(SymbolNum(num))
 		if err != nil {
 			return nil, err
 		}
 		tsyms[num] = text
+		patterns[num] = gram.Patterns[SymbolNum(num)]
 	}
 
 	nsymCount := gram.SymbolTable.getNumOfNonTerminalSymbols()
@@ -196,6 +238,7 @@ func GenJSON(gram *Grammar, tab *Table) ([]byte, error) {
 		AlternativeSymbolCounts []int         `json:"alternative_symbol_counts"`
 		EOFSymbol               int           `json:"eof_symbol"`
 		TerminalSymbols         []string      `json:"terminal_symbols"`
+		TerminalSymbolPatterns  []string      `json:"terminal_symbol_patterns"`
 		TerminalSymbolCount     int           `json:"terminal_symbol_count"`
 		NonTerminalSymbols      []string      `json:"non_terminal_symbols"`
 		NonTerminalSymbolCount  int           `json:"non_terminal_symbol_count"`
@@ -209,6 +252,7 @@ func GenJSON(gram *Grammar, tab *Table) ([]byte, error) {
 		AlternativeSymbolCounts: altSymCounts,
 		EOFSymbol:               SymbolEOF.Num().Int(),
 		TerminalSymbols:         tsyms,
+		TerminalSymbolPatterns:  patterns,
 		TerminalSymbolCount:     tsymCount,
 		NonTerminalSymbols:      nsyms,
 		NonTerminalSymbolCount:  nsymCount,

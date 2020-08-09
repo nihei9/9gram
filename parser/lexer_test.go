@@ -16,19 +16,20 @@ func TestLexer_Run(t *testing.T) {
 	}{
 		{
 			caption: "the lexer can recognize all kinds of tokens",
-			src:     "|:;id_1??? ",
+			src:     `|:;id_1"pattern"??? `,
 			tokens: []*token{
 				newSymbolToken(dummyPos, tokenKindVBar),
 				newSymbolToken(dummyPos, tokenKindColon),
 				newSymbolToken(dummyPos, tokenKindSemicolon),
 				newIDToken(dummyPos, "id_1"),
+				newPatternToken(dummyPos, "pattern"),
 				newUnknownToken(dummyPos, "???"),
 				newEOFToken(dummyPos),
 			},
 		},
 		{
 			caption: "the lexer can recognize correct format tokens following unknown tokens",
-			src:     "?|?:?;?id?",
+			src:     `?|?:?;?id?"pattern"?`,
 			tokens: []*token{
 				newUnknownToken(dummyPos, "?"),
 				newSymbolToken(dummyPos, tokenKindVBar),
@@ -38,6 +39,8 @@ func TestLexer_Run(t *testing.T) {
 				newSymbolToken(dummyPos, tokenKindSemicolon),
 				newUnknownToken(dummyPos, "?"),
 				newIDToken(dummyPos, "id"),
+				newUnknownToken(dummyPos, "?"),
+				newPatternToken(dummyPos, "pattern"),
 				newUnknownToken(dummyPos, "?"),
 				newEOFToken(dummyPos),
 			},
