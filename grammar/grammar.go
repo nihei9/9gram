@@ -87,12 +87,18 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 		if ast.Ty != parser.ASTTypeProduction {
 			continue
 		}
-
 		lhsAST := ast.Children[0]
 		lhsText, _ := lhsAST.GetText()
-		_, err := symTab.registerNonTerminalSymbol(lhsText)
-		if err != nil {
-			return nil, err
+		if isLexemeProduction(ast) {
+			_, err := symTab.registerTerminalSymbol(lhsText)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			_, err := symTab.registerNonTerminalSymbol(lhsText)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -102,52 +108,88 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 		if ast.Ty != parser.ASTTypeProduction {
 			continue
 		}
-
-		lhsAST := ast.Children[0]
-		lhsText, _ := lhsAST.GetText()
-		lhsSym, _ := symTab.ToSymbol(lhsText)
-
-		for _, altAST := range ast.Children[1:] {
-			rhsSyms := make([]Symbol, len(altAST.Children))
-			for i, elemAST := range altAST.Children {
-				if elemAST.Ty == parser.ASTTypePattern {
-					patText, ok := elemAST.GetText()
-					if !ok {
-						return nil, fmt.Errorf("text representation of pattern string is not found")
-					}
-					sym, ok := pat2Sym[patText]
-					if !ok {
-						symText := fmt.Sprintf("$%v", patNum)
-						patNum++
-						var err error
-						sym, err = symTab.registerTerminalSymbol(symText)
-						if err != nil {
-							return nil, err
-						}
-						pat2Sym[patText] = sym
-						sym2Pat[sym.Num()] = patText
-					}
-					rhsSyms[i] = sym
-				} else {
-					symText, _ := elemAST.GetText()
-					sym, err := symTab.registerTerminalSymbol(symText)
-					if err != nil {
-						return nil, err
-					}
-					rhsSyms[i] = sym
-				}
-			}
-
-			prod, err := newProduction(lhsSym, rhsSyms)
+		if isLexemeProduction(ast) {
+			registerLexemes(ast, symTab, sym2Pat, pat2Sym)
+		} else {
+			err := registerProds(ast, prods, symTab, sym2Pat, pat2Sym, &patNum)
 			if err != nil {
 				return nil, err
 			}
-
-			prods.append(prod)
 		}
 	}
 
 	return gram, nil
+}
+
+func isLexemeProduction(prodAST *parser.AST) bool {
+	if prodAST.Ty != parser.ASTTypeProduction {
+		return false
+	}
+	if len(prodAST.Children) == 2 && len(prodAST.Children[1].Children) == 1 && prodAST.Children[1].Children[0].Ty == parser.ASTTypePattern {
+		return true
+	}
+	return false
+}
+
+func registerLexemes(ast *parser.AST, symTab *SymbolTable, sym2Pat map[SymbolNum]string, pat2Sym map[string]Symbol) {
+	lhsAST := ast.Children[0]
+	lhsText, _ := lhsAST.GetText()
+	lhsSym, _ := symTab.ToSymbol(lhsText)
+	patText, _ := ast.Children[1].Children[0].GetText()
+	pat2Sym[patText] = lhsSym
+	sym2Pat[lhsSym.Num()] = patText
+}
+
+func registerProds(ast *parser.AST, prods *productionSet, symTab *SymbolTable, sym2Pat map[SymbolNum]string, pat2Sym map[string]Symbol, patNum *int) error {
+	lhsAST := ast.Children[0]
+	lhsText, _ := lhsAST.GetText()
+	lhsSym, _ := symTab.ToSymbol(lhsText)
+	for _, altAST := range ast.Children[1:] {
+		err := registerAlternative(altAST, prods, lhsSym, symTab, sym2Pat, pat2Sym, patNum)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func registerAlternative(altAST *parser.AST, prods *productionSet, lhsSym Symbol, symTab *SymbolTable, sym2Pat map[SymbolNum]string, pat2Sym map[string]Symbol, patNum *int) error {
+	rhsSyms := make([]Symbol, len(altAST.Children))
+	for i, elemAST := range altAST.Children {
+		if elemAST.Ty == parser.ASTTypePattern {
+			patText, ok := elemAST.GetText()
+			if !ok {
+				return fmt.Errorf("text representation of pattern string is not found")
+			}
+			sym, ok := pat2Sym[patText]
+			if !ok {
+				symText := fmt.Sprintf("$%v", *patNum)
+				*patNum = *patNum + 1
+				var err error
+				sym, err = symTab.registerTerminalSymbol(symText)
+				if err != nil {
+					return err
+				}
+				pat2Sym[patText] = sym
+				sym2Pat[sym.Num()] = patText
+			}
+			rhsSyms[i] = sym
+		} else {
+			symText, _ := elemAST.GetText()
+			sym, err := symTab.registerTerminalSymbol(symText)
+			if err != nil {
+				return err
+			}
+			rhsSyms[i] = sym
+		}
+	}
+	prod, err := newProduction(lhsSym, rhsSyms)
+	if err != nil {
+		return err
+	}
+	prods.append(prod)
+
+	return nil
 }
 
 type Table struct {
@@ -216,6 +258,26 @@ func GenJSON(gram *Grammar, tab *Table) ([]byte, error) {
 		tsyms[num] = text
 		patterns[num] = gram.Patterns[SymbolNum(num)]
 	}
+	var unusedTSyms []int
+	{
+		tsymUseChek := make([]bool, tsymCount)
+		tsymUseChek[symbolNil.Num().Int()] = true
+		tsymUseChek[SymbolEOF.Num().Int()] = true
+		for _, prod := range gram.ProductionSet.getAll() {
+			for _, rhsSym := range prod.rhs {
+				if !rhsSym.isTerminal() {
+					continue
+				}
+				tsymUseChek[rhsSym.Num().Int()] = true
+			}
+		}
+		for num, used := range tsymUseChek {
+			if used {
+				continue
+			}
+			unusedTSyms = append(unusedTSyms, num)
+		}
+	}
 
 	nsymCount := gram.SymbolTable.getNumOfNonTerminalSymbols()
 	nsyms := make([]string, nsymCount)
@@ -240,6 +302,7 @@ func GenJSON(gram *Grammar, tab *Table) ([]byte, error) {
 		TerminalSymbols         []string      `json:"terminal_symbols"`
 		TerminalSymbolPatterns  []string      `json:"terminal_symbol_patterns"`
 		TerminalSymbolCount     int           `json:"terminal_symbol_count"`
+		UnusedTerminalSymbols   []int         `json:"unused_terminal_symbols"`
 		NonTerminalSymbols      []string      `json:"non_terminal_symbols"`
 		NonTerminalSymbolCount  int           `json:"non_terminal_symbol_count"`
 	}{
@@ -254,6 +317,7 @@ func GenJSON(gram *Grammar, tab *Table) ([]byte, error) {
 		TerminalSymbols:         tsyms,
 		TerminalSymbolPatterns:  patterns,
 		TerminalSymbolCount:     tsymCount,
+		UnusedTerminalSymbols:   unusedTSyms,
 		NonTerminalSymbols:      nsyms,
 		NonTerminalSymbolCount:  nsymCount,
 	})
