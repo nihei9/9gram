@@ -139,9 +139,9 @@ func genFollowEntry(cc *followComContext, sym Symbol) (*FollowEntry, error) {
 			}
 
 			if i+1 < prod.rhsLen {
-				fst := cc.first.Get(prod.id, i+1)
-				if fst == nil {
-					return nil, fmt.Errorf("failed to get a FIRST set; production: %v, dot: %v", prod.id, i)
+				fst, err := cc.first.Get(prod, i+1)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get a FIRST set; production: %v, dot: %v, error: %v", prod.id, i, err)
 				}
 				entry.merge(fst, nil)
 

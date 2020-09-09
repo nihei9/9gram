@@ -92,9 +92,9 @@ func TestGenFirst(t *testing.T) {
 					t.Fatalf("a production was not found; LHS: %v (%v)", ttFirst.lhs, lhsSym)
 				}
 
-				actualFirst := fst.Get(prod[ttFirst.num].id, ttFirst.dot)
-				if actualFirst == nil {
-					t.Fatalf("failed to get a FIRST set; LHS: %v (%v), num: %v, dot: %v", ttFirst.lhs, lhsSym, ttFirst.num, ttFirst.dot)
+				actualFirst, err := fst.Get(prod[ttFirst.num], ttFirst.dot)
+				if err != nil {
+					t.Fatalf("failed to get a FIRST set; LHS: %v (%v), num: %v, dot: %v, error: %v", ttFirst.lhs, lhsSym, ttFirst.num, ttFirst.dot, err)
 				}
 
 				expectedFirst := genExpectedFirstEntry(t, ttFirst.symbols, ttFirst.empty, gram.SymbolTable)
