@@ -74,9 +74,9 @@ func TestFollowSet(t *testing.T) {
 					t.Fatalf("a symbol was not found; symbol: %v", ttFollow.nSym)
 				}
 
-				actualFollow := flw.Get(nSym)
-				if actualFollow == nil {
-					t.Fatalf("failed to get a FOLLOW set; non-terminal symbol: %v (%v)", ttFollow.nSym, nSym)
+				actualFollow, err := flw.Get(nSym)
+				if err != nil {
+					t.Fatalf("failed to get a FOLLOW set; non-terminal symbol: %v (%v), error: %v", ttFollow.nSym, nSym, err)
 				}
 
 				expectedFollow := genExpectedFollowEntry(t, ttFollow.symbols, ttFollow.eof, gram.SymbolTable)

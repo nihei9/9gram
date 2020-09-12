@@ -148,7 +148,10 @@ func genSLRParsingTable(automaton *LR0Automaton, prods *productionSet, follow *F
 
 		for prodID := range state.Reducible {
 			prod, _ := prods.findByID(prodID)
-			flw := follow.Get(prod.lhs)
+			flw, err := follow.Get(prod.lhs)
+			if err != nil {
+				return nil, err
+			}
 			for sym := range flw.symbols {
 				err := ptab.writeReduceAction(state.Num, sym, prod.num)
 				if err != nil {
