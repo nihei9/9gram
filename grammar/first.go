@@ -14,183 +14,136 @@ func newFirstEntry() *FirstEntry {
 	}
 }
 
-func (e *FirstEntry) add(sym Symbol) {
+func (e *FirstEntry) add(sym Symbol) bool {
+	changed := false
+	l := len(e.symbols)
+
 	e.symbols[sym] = struct{}{}
-}
 
-func (e *FirstEntry) addEmpty() {
-	e.empty = true
-}
-
-func (e *FirstEntry) mergeExceptEmpty(target *FirstEntry) {
-	for sym := range target.symbols {
-		e.add(sym)
+	if l != len(e.symbols) {
+		changed = true
 	}
+	return changed
+}
+
+func (e *FirstEntry) addEmpty() bool {
+	if !e.empty {
+		e.empty = true
+		return true
+	}
+
+	return false
+}
+
+func (e *FirstEntry) mergeExceptEmpty(target *FirstEntry) bool {
+	if target == nil {
+		return false
+	}
+	isEntryChanged := false
+	for sym := range target.symbols {
+		added := e.add(sym)
+		if added {
+			isEntryChanged = true
+		}
+	}
+	return isEntryChanged
 }
 
 type First struct {
-	set map[ProductionID][]*FirstEntry
+	set map[Symbol]*FirstEntry
 }
 
 func newFirst(prods *productionSet) *First {
 	fst := &First{
-		set: map[ProductionID][]*FirstEntry{},
+		set: map[Symbol]*FirstEntry{},
 	}
 	for _, prod := range prods.getAll() {
-		len := prod.rhsLen
-		if prod.isEmpty() {
-			len = 1
+		if _, ok := fst.set[prod.lhs]; ok {
+			continue
 		}
-		fst.set[prod.id] = make([]*FirstEntry, len)
+		fst.set[prod.lhs] = newFirstEntry()
 	}
 
 	return fst
 }
 
-func (fst *First) Get(prod ProductionID, head int) *FirstEntry {
-	return fst.set[prod][head]
+func (fst *First) Get(prod *production, head int) (*FirstEntry, error) {
+	entry := newFirstEntry()
+	if prod.rhsLen <= head {
+		entry.addEmpty()
+		return entry, nil
+	}
+	for _, sym := range prod.rhs[head:] {
+		if sym.isTerminal() {
+			entry.add(sym)
+			return entry, nil
+		}
+
+		e := fst.getBySymbol(sym)
+		if e == nil {
+			return nil, fmt.Errorf("FIRST set was not found; symbol: %s", sym)
+		}
+		for s := range e.symbols {
+			entry.add(s)
+		}
+		if !e.empty {
+			return entry, nil
+		}
+	}
+	entry.addEmpty()
+	return entry, nil
 }
 
-func (fst First) put(e *FirstEntry, prod ProductionID, head int) {
-	fst.set[prod][head] = e
-}
-
-type firstComFrame struct {
-	prodID ProductionID
-	head   int
-	prev   *firstComFrame
+func (fst *First) getBySymbol(sym Symbol) *FirstEntry {
+	return fst.set[sym]
 }
 
 type firstComContext struct {
-	prods    *productionSet
-	first    *First
-	frameTop *firstComFrame
+	first *First
 }
 
-func newfirstComContext(prods *productionSet) *firstComContext {
+func newFirstComContext(prods *productionSet) *firstComContext {
 	return &firstComContext{
-		prods:    prods,
-		first:    newFirst(prods),
-		frameTop: nil,
+		first: newFirst(prods),
 	}
-}
-
-func (cc *firstComContext) push(prod *production, head int) {
-	cc.frameTop = &firstComFrame{
-		prodID: prod.id,
-		head:   head,
-		prev:   cc.frameTop,
-	}
-}
-
-func (cc *firstComContext) pop() {
-	cc.frameTop = cc.frameTop.prev
-}
-
-func (cc *firstComContext) isAlreadyStacked(prod *production, head int) bool {
-	for f := cc.frameTop; f != nil; f = f.prev {
-		if f.prodID == prod.id && f.head == head {
-			return true
-		}
-	}
-	return false
 }
 
 func genFirst(prods *productionSet) (*First, error) {
-	cc := newfirstComContext(prods)
-	for _, prod := range prods.getAll() {
-		if prod.isEmpty() {
-			_, err := genFirstEntry(cc, prod, 0)
+	cc := newFirstComContext(prods)
+	for {
+		more := false
+		for _, prod := range prods.getAll() {
+			e := cc.first.getBySymbol(prod.lhs)
+			isEntryChanged, err := genProdFirstEntry(cc, e, prod)
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			for i := 0; i < prod.rhsLen; i++ {
-				_, err := genFirstEntry(cc, prod, i)
-				if err != nil {
-					return nil, err
-				}
+			if isEntryChanged {
+				more = true
 			}
+		}
+		if !more {
+			break
 		}
 	}
 	return cc.first, nil
 }
 
-func genFirstEntry(cc *firstComContext, prod *production, head int) (*FirstEntry, error) {
+func genProdFirstEntry(cc *firstComContext, acc *FirstEntry, prod *production) (bool, error) {
 	if prod.isEmpty() {
-		if head != 0 {
-			return nil, fmt.Errorf("production passed is an empty rule but head is not 0; production: %v, head: %v", prod.id, head)
-		}
-	} else {
-		if head < 0 || head >= prod.rhsLen {
-			return nil, fmt.Errorf("head must be between 0 and %v; production: %v, head: %v", prod.rhsLen-1, prod.id, head)
-		}
+		return acc.addEmpty(), nil
 	}
 
-	// guards for avoiding the infinite recursion
-	{
-		// A FIRST set is already computed
-		if fst := cc.first.Get(prod.id, head); fst != nil {
-			return fst, nil
+	for _, rhsSym := range prod.rhs {
+		if rhsSym.isTerminal() {
+			return acc.add(rhsSym), nil
 		}
 
-		if cc.isAlreadyStacked(prod, head) {
-			return newFirstEntry(), nil
+		e := cc.first.getBySymbol(rhsSym)
+		changed := acc.mergeExceptEmpty(e)
+		if !e.empty {
+			return changed, nil
 		}
 	}
-
-	cc.push(prod, head)
-	defer cc.pop()
-
-	// When the production is empty, a FIRST set contains the only EMPTY symbol.
-	if prod.isEmpty() || head >= prod.rhsLen {
-		e := newFirstEntry()
-		e.addEmpty()
-		cc.first.put(e, prod.id, head)
-
-		return e, nil
-	}
-
-	headSym := prod.rhs[head]
-	if headSym.isNil() {
-		return nil, fmt.Errorf("head symbol must be a non-nil symbol; production: %v, head: %v", prod.id, head)
-	}
-
-	// When the head symbol is a terminal symbol, a FIRST set contains only it.
-	if headSym.isTerminal() {
-		e := newFirstEntry()
-		e.add(headSym)
-		cc.first.put(e, prod.id, head)
-
-		return e, nil
-	}
-
-	entry := newFirstEntry()
-	headSymProds, ok := cc.prods.findByLHS(headSym)
-	if !ok {
-		return nil, fmt.Errorf("production was not found; LHS: %v", headSym)
-	}
-	for _, headSymProd := range headSymProds {
-		e, err := genFirstEntry(cc, headSymProd, 0)
-		if err != nil {
-			return nil, err
-		}
-		entry.mergeExceptEmpty(e)
-
-		if e.empty {
-			nextHead := head + 1
-			if !headSymProd.isEmpty() && nextHead < headSymProd.rhsLen {
-				f, err := genFirstEntry(cc, headSymProd, nextHead)
-				if err != nil {
-					return nil, err
-				}
-				entry.mergeExceptEmpty(f)
-			} else {
-				entry.addEmpty()
-			}
-		}
-	}
-	cc.first.put(entry, prod.id, head)
-
-	return entry, nil
+	return acc.addEmpty(), nil
 }

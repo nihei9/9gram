@@ -18,148 +18,188 @@ func newFollowEntry() *FollowEntry {
 	}
 }
 
-func (e *FollowEntry) add(sym Symbol) {
+func (e *FollowEntry) add(sym Symbol) bool {
+	changed := false
+	l := len(e.symbols)
+
 	e.symbols[sym] = struct{}{}
+
+	if l != len(e.symbols) {
+		changed = true
+	}
+	return changed
 }
 
-func (e *FollowEntry) addEOF() {
-	e.eof = true
+func (e *FollowEntry) addEOF() bool {
+	if !e.eof {
+		e.eof = true
+		return true
+	}
+	return false
 }
 
-func (e *FollowEntry) merge(fst *FirstEntry, flw *FollowEntry) {
+func (e *FollowEntry) merge(fst *FirstEntry, flw *FollowEntry) bool {
+	changed := false
+
 	if fst != nil {
 		for sym := range fst.symbols {
-			e.add(sym)
+			added := e.add(sym)
+			if added {
+				changed = true
+			}
 		}
 	}
 
 	if flw != nil {
 		for sym := range flw.symbols {
-			e.add(sym)
+			added := e.add(sym)
+			if added {
+				changed = true
+			}
 		}
 		if flw.eof {
-			e.addEOF()
+			added := e.addEOF()
+			if added {
+				changed = true
+			}
 		}
 	}
+
+	return changed
 }
 
 type Follow struct {
 	set map[Symbol]*FollowEntry
 }
 
-func newFollow() *Follow {
-	return &Follow{
+func newFollow(prods *productionSet) *Follow {
+	flw := &Follow{
 		set: map[Symbol]*FollowEntry{},
 	}
+	for _, prod := range prods.getAll() {
+		if _, ok := flw.set[prod.lhs]; ok {
+			continue
+		}
+		flw.set[prod.lhs] = newFollowEntry()
+	}
+	return flw
 }
 
-func (flw *Follow) Get(sym Symbol) *FollowEntry {
-	return flw.set[sym]
-}
-
-func (flw *Follow) put(e *FollowEntry, sym Symbol) {
-	flw.set[sym] = e
+func (flw *Follow) Get(sym Symbol) (*FollowEntry, error) {
+	e, ok := flw.set[sym]
+	if !ok {
+		return nil, fmt.Errorf("FOLLOW set was not found; symbol: %s", sym)
+	}
+	return e, nil
 }
 
 type followComContext struct {
 	prods  *productionSet
 	first  *First
 	follow *Follow
-	stack  []Symbol
 }
 
-func newfollowComContext(prods *productionSet, first *First) *followComContext {
+func newFollowComContext(prods *productionSet, first *First) *followComContext {
 	return &followComContext{
 		prods:  prods,
 		first:  first,
-		follow: newFollow(),
-		stack:  []Symbol{},
+		follow: newFollow(prods),
 	}
-}
-
-func (cc *followComContext) push(sym Symbol) {
-	cc.stack = append(cc.stack, sym)
-}
-
-func (cc *followComContext) pop() {
-	cc.stack = cc.stack[:len(cc.stack)-1]
-}
-
-func (cc *followComContext) isAlreadyStacked(sym Symbol) bool {
-	for _, f := range cc.stack {
-		if f == sym {
-			return true
-		}
-	}
-
-	return false
 }
 
 func genFollow(prods *productionSet, first *First) (*Follow, error) {
-	cc := newfollowComContext(prods, first)
+	ntsyms := map[Symbol]struct{}{}
 	for _, prod := range prods.getAll() {
-		_, err := genFollowEntry(cc, prod.lhs)
-		if err != nil {
-			return nil, err
+		if _, ok := ntsyms[prod.lhs]; ok {
+			continue
 		}
-	}
-	return cc.follow, nil
-}
-
-func genFollowEntry(cc *followComContext, sym Symbol) (*FollowEntry, error) {
-	if sym.isNil() {
-		return nil, fmt.Errorf("symbol is nil")
+		ntsyms[prod.lhs] = struct{}{}
 	}
 
-	// guards for avoiding the infinite recursion
-	{
-		// already computed
-		if flw := cc.follow.Get(sym); flw != nil {
-			return flw, nil
-		}
-
-		if cc.isAlreadyStacked(sym) {
-			return newFollowEntry(), nil
-		}
-	}
-
-	cc.push(sym)
-	defer cc.pop()
-
-	entry := newFollowEntry()
-
-	if sym.isStart() {
-		entry.addEOF()
-	}
-
-	for _, prod := range cc.prods.getAll() {
-		for i, rhsSym := range prod.rhs {
-			if rhsSym != sym {
-				continue
-			}
-
-			if i+1 < prod.rhsLen {
-				fst := cc.first.Get(prod.id, i+1)
-				if fst == nil {
-					return nil, fmt.Errorf("failed to get a FIRST set; production: %v, dot: %v", prod.id, i)
-				}
-				entry.merge(fst, nil)
-
-				if !fst.empty {
-					continue
-				}
-			}
-
-			flw, err := genFollowEntry(cc, prod.lhs)
+	cc := newFollowComContext(prods, first)
+	for {
+		more := false
+		for ntsym := range ntsyms {
+			e, err := cc.follow.Get(ntsym)
 			if err != nil {
 				return nil, err
 			}
-			entry.merge(nil, flw)
+			if ntsym.isStart() {
+				changed := e.addEOF()
+				if changed {
+					more = true
+				}
+			}
+			for _, prod := range prods.getAll() {
+				for i, sym := range prod.rhs {
+					if sym != ntsym {
+						continue
+					}
+					fst, err := first.Get(prod, i+1)
+					if err != nil {
+						return nil, err
+					}
+					changed := e.merge(fst, nil)
+					if changed {
+						more = true
+					}
+					if fst.empty {
+						flw, err := cc.follow.Get(prod.lhs)
+						if err != nil {
+							return nil, err
+						}
+						changed := e.merge(nil, flw)
+						if changed {
+							more = true
+						}
+					}
+				}
+			}
+		}
+		if !more {
+			break
 		}
 	}
-	cc.follow.put(entry, sym)
 
-	return entry, nil
+	return cc.follow, nil
+}
+
+func genFollowEntry(cc *followComContext, acc *FollowEntry, ntsym Symbol) (bool, error) {
+	isEntryChanged := false
+
+	if ntsym.isStart() {
+		changed := acc.addEOF()
+		if changed {
+			isEntryChanged = true
+		}
+	}
+	for _, prod := range cc.prods.getAll() {
+		for i, sym := range prod.rhs {
+			if sym != ntsym {
+				continue
+			}
+			fst, err := cc.first.Get(prod, i+1)
+			if err != nil {
+				return false, err
+			}
+			changed := acc.merge(fst, nil)
+			if changed {
+				isEntryChanged = true
+			}
+			if fst.empty {
+				flw, err := cc.follow.Get(prod.lhs)
+				if err != nil {
+					return false, err
+				}
+				changed := acc.merge(nil, flw)
+				if changed {
+					isEntryChanged = true
+				}
+			}
+		}
+	}
+
+	return isEntryChanged, nil
 }
 
 func PrintFollow(w io.Writer, follow *Follow, symTab *SymbolTable) {
@@ -180,7 +220,11 @@ func PrintFollow(w io.Writer, follow *Follow, symTab *SymbolTable) {
 		if !ok {
 			nsymText = "<Symbol Not Found>"
 		}
-		e := follow.Get(nsym)
+		e, err := follow.Get(nsym)
+		if err != nil {
+			fmt.Fprintf(w, "! %v", err)
+			continue
+		}
 		fmt.Fprintf(w, "%v:", nsymText)
 		if e.eof {
 			fmt.Fprintf(w, " <eof>")
