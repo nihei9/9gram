@@ -195,7 +195,8 @@ func registerAlternative(altAST *parser.AST, prods *productionSet, lhsSym Symbol
 			break
 		}
 
-		if altAST.Children[i].Ty == parser.ASTTypeOptional {
+		switch altAST.Children[i].Ty {
+		case parser.ASTTypeOptional:
 			optSym := rhsSym
 
 			lhsText := fmt.Sprintf("$$%v", *prodNum)
@@ -214,6 +215,50 @@ func registerAlternative(altAST *parser.AST, prods *productionSet, lhsSym Symbol
 			}
 			prods.append(optProd1)
 			prods.append(optProd2)
+
+			rhsSym = lhsSym
+			i++
+		case parser.ASTTypeZeroOrMore:
+			repeatSym := rhsSym
+
+			lhsText := fmt.Sprintf("$$%v", *prodNum)
+			*prodNum = *prodNum + 1
+			lhsSym, err := symTab.registerNonTerminalSymbol(lhsText)
+			if err != nil {
+				return err
+			}
+			repeatProd1, err := newProduction(lhsSym, []Symbol{repeatSym, lhsSym})
+			if err != nil {
+				return err
+			}
+			repeatProd2, err := newProduction(lhsSym, []Symbol{})
+			if err != nil {
+				return err
+			}
+			prods.append(repeatProd1)
+			prods.append(repeatProd2)
+
+			rhsSym = lhsSym
+			i++
+		case parser.ASTTypeOneOrMore:
+			repeatSym := rhsSym
+
+			lhsText := fmt.Sprintf("$$%v", *prodNum)
+			*prodNum = *prodNum + 1
+			lhsSym, err := symTab.registerNonTerminalSymbol(lhsText)
+			if err != nil {
+				return err
+			}
+			repeatProd1, err := newProduction(lhsSym, []Symbol{repeatSym, lhsSym})
+			if err != nil {
+				return err
+			}
+			repeatProd2, err := newProduction(lhsSym, []Symbol{repeatSym})
+			if err != nil {
+				return err
+			}
+			prods.append(repeatProd1)
+			prods.append(repeatProd2)
 
 			rhsSym = lhsSym
 			i++
