@@ -14,6 +14,7 @@ const (
 	tokenKindColon     = tokenKind(":")
 	tokenKindVBar      = tokenKind("|")
 	tokenKindSemicolon = tokenKind(";")
+	tokenKindOptional  = tokenKind("?")
 	tokenKindID        = tokenKind("id")
 	tokenKindPattern   = tokenKind("pattern")
 	tokenKindEOF       = tokenKind("eof")
@@ -125,6 +126,8 @@ func (l *lexer) next() (*token, error) {
 		return newSymbolToken(pos, tokenKindVBar), nil
 	case c == ';':
 		return newSymbolToken(pos, tokenKindSemicolon), nil
+	case c == '?':
+		return newSymbolToken(pos, tokenKindOptional), nil
 	case isIDChar(c):
 		text, err := l.readID()
 		if err != nil {
@@ -254,7 +257,7 @@ func isUnknownChar(c rune) bool {
 }
 
 func isHeadChar(c rune) bool {
-	return c == ':' || c == '|' || c == ';' || isIDHeadChar(c) || c == '"' || isWhitespace(c)
+	return c == ':' || c == '|' || c == ';' || c == '?' || isIDHeadChar(c) || c == '"' || isWhitespace(c)
 }
 
 func (l *lexer) read() (rune, bool, error) {

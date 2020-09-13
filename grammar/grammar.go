@@ -104,6 +104,7 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 
 	// Generate productions
 	patNum := 0
+	prodNum := 0
 	for _, ast := range root.Children {
 		if ast.Ty != parser.ASTTypeProduction {
 			continue
@@ -111,7 +112,7 @@ func GenGrammar(root *parser.AST) (*Grammar, error) {
 		if isLexemeProduction(ast) {
 			registerLexemes(ast, symTab, sym2Pat, pat2Sym)
 		} else {
-			err := registerProds(ast, prods, symTab, sym2Pat, pat2Sym, &patNum)
+			err := registerProds(ast, prods, symTab, sym2Pat, pat2Sym, &patNum, &prodNum)
 			if err != nil {
 				return nil, err
 			}
@@ -140,12 +141,12 @@ func registerLexemes(ast *parser.AST, symTab *SymbolTable, sym2Pat map[SymbolNum
 	sym2Pat[lhsSym.Num()] = patText
 }
 
-func registerProds(ast *parser.AST, prods *productionSet, symTab *SymbolTable, sym2Pat map[SymbolNum]string, pat2Sym map[string]Symbol, patNum *int) error {
+func registerProds(ast *parser.AST, prods *productionSet, symTab *SymbolTable, sym2Pat map[SymbolNum]string, pat2Sym map[string]Symbol, patNum *int, prodNum *int) error {
 	lhsAST := ast.Children[0]
 	lhsText, _ := lhsAST.GetText()
 	lhsSym, _ := symTab.ToSymbol(lhsText)
 	for _, altAST := range ast.Children[1:] {
-		err := registerAlternative(altAST, prods, lhsSym, symTab, sym2Pat, pat2Sym, patNum)
+		err := registerAlternative(altAST, prods, lhsSym, symTab, sym2Pat, pat2Sym, patNum, prodNum)
 		if err != nil {
 			return err
 		}
@@ -153,9 +154,12 @@ func registerProds(ast *parser.AST, prods *productionSet, symTab *SymbolTable, s
 	return nil
 }
 
-func registerAlternative(altAST *parser.AST, prods *productionSet, lhsSym Symbol, symTab *SymbolTable, sym2Pat map[SymbolNum]string, pat2Sym map[string]Symbol, patNum *int) error {
-	rhsSyms := make([]Symbol, len(altAST.Children))
-	for i, elemAST := range altAST.Children {
+func registerAlternative(altAST *parser.AST, prods *productionSet, lhsSym Symbol, symTab *SymbolTable, sym2Pat map[SymbolNum]string, pat2Sym map[string]Symbol, patNum *int, prodNum *int) error {
+	var rhsSyms []Symbol
+	i := 0
+	for i < len(altAST.Children) {
+		var rhsSym Symbol
+		elemAST := altAST.Children[i]
 		if elemAST.Ty == parser.ASTTypePattern {
 			patText, ok := elemAST.GetText()
 			if !ok {
@@ -173,15 +177,49 @@ func registerAlternative(altAST *parser.AST, prods *productionSet, lhsSym Symbol
 				pat2Sym[patText] = sym
 				sym2Pat[sym.Num()] = patText
 			}
-			rhsSyms[i] = sym
-		} else {
+			rhsSym = sym
+		} else if elemAST.Ty == parser.ASTTypeSymbol {
 			symText, _ := elemAST.GetText()
 			sym, err := symTab.registerTerminalSymbol(symText)
 			if err != nil {
 				return err
 			}
-			rhsSyms[i] = sym
+			rhsSym = sym
+		} else {
+			return fmt.Errorf("invalid symbol sequence")
 		}
+		i++
+
+		if i >= len(altAST.Children) {
+			rhsSyms = append(rhsSyms, rhsSym)
+			break
+		}
+
+		if altAST.Children[i].Ty == parser.ASTTypeOptional {
+			optSym := rhsSym
+
+			lhsText := fmt.Sprintf("$$%v", *prodNum)
+			*prodNum = *prodNum + 1
+			lhsSym, err := symTab.registerNonTerminalSymbol(lhsText)
+			if err != nil {
+				return err
+			}
+			optProd1, err := newProduction(lhsSym, []Symbol{optSym})
+			if err != nil {
+				return err
+			}
+			optProd2, err := newProduction(lhsSym, []Symbol{})
+			if err != nil {
+				return err
+			}
+			prods.append(optProd1)
+			prods.append(optProd2)
+
+			rhsSym = lhsSym
+			i++
+		}
+
+		rhsSyms = append(rhsSyms, rhsSym)
 	}
 	prod, err := newProduction(lhsSym, rhsSyms)
 	if err != nil {
