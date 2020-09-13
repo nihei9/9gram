@@ -193,9 +193,15 @@ func (p *parser) consume(expected tokenKind) bool {
 		tok = p.peekedTok
 		p.peekedTok = nil
 	} else {
-		tok, err = p.lex.next()
-		if err != nil {
-			panic(err)
+		for {
+			tok, err = p.lex.next()
+			if err != nil {
+				panic(err)
+			}
+			if tok.kind == tokenKindComment {
+				continue
+			}
+			break
 		}
 	}
 	p.lastTok = tok
