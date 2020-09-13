@@ -31,8 +31,23 @@ func TestLexer_Run(t *testing.T) {
 			},
 		},
 		{
+			caption: "the lexer can recognize escape sequences in pattern",
+			src:     `"\"\\"`,
+			tokens: []*token{
+				newPatternToken(dummyPos, `"\`),
+			},
+		},
+		{
+			caption: "the lexer can recognize comments",
+			src:     "// This is newline-terminated comment.\n// This is eof-terminated comment.",
+			tokens: []*token{
+				newCommentToken(dummyPos, " This is newline-terminated comment."),
+				newCommentToken(dummyPos, " This is eof-terminated comment."),
+			},
+		},
+		{
 			caption: "the lexer can recognize correct format tokens following unknown tokens",
-			src:     `!|!:!;!?!*!+!id!"pattern"!`,
+			src:     `!|!:!;!?!*!+!id!"pattern"!/foo/`,
 			tokens: []*token{
 				newUnknownToken(dummyPos, "!"),
 				newSymbolToken(dummyPos, tokenKindVBar),
@@ -51,6 +66,9 @@ func TestLexer_Run(t *testing.T) {
 				newUnknownToken(dummyPos, "!"),
 				newPatternToken(dummyPos, "pattern"),
 				newUnknownToken(dummyPos, "!"),
+				newUnknownToken(dummyPos, "/"),
+				newIDToken(dummyPos, "foo"),
+				newUnknownToken(dummyPos, "/"),
 				newEOFToken(dummyPos),
 			},
 		},

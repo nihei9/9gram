@@ -14,7 +14,16 @@ func TestParser(t *testing.T) {
 	}{
 		{
 			caption: "when a source is in the correct format, the parser can recognize it",
-			src:     `a: a b c | c; c: c d e | e; d: "(" e ")"; e: f? g* h+; f: "foo"?; g: "bar"*; h: "baz"+;`,
+			src: `
+// This is 'a' rule.
+a: a b c | c;
+c: c d e | e;
+d: "(" e ")";
+e: f? g* h+;
+f: "foo"?;
+g: "bar"*;
+h: "baz"+;
+`,
 		},
 		{
 			caption: "when a source is in the correct format (it contains non-empty productions), the parser can recognize it",

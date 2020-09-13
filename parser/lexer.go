@@ -19,6 +19,7 @@ const (
 	tokenKindOneOrMore  = tokenKind("+")
 	tokenKindID         = tokenKind("id")
 	tokenKindPattern    = tokenKind("pattern")
+	tokenKindComment    = tokenKind("comment")
 	tokenKindEOF        = tokenKind("eof")
 	tokenKindUnknown    = tokenKind("unknown")
 )
@@ -73,6 +74,14 @@ func newPatternToken(pos Position, text string) *token {
 	}
 }
 
+func newCommentToken(pos Position, text string) *token {
+	return &token{
+		kind: tokenKindComment,
+		pos:  pos,
+		text: text,
+	}
+}
+
 func newEOFToken(pos Position) *token {
 	return &token{
 		kind: tokenKindEOF,
@@ -95,6 +104,9 @@ type lexer struct {
 	pos         Position
 	lastChar    rune
 	lastCharPos Position
+	prevChar    rune
+	prevCharPos Position
+	reachedEOF  bool
 }
 
 func newLexer(src io.Reader) *lexer {
@@ -103,6 +115,9 @@ func newLexer(src io.Reader) *lexer {
 		pos:         newPosition(),
 		lastChar:    nullChar,
 		lastCharPos: newPosition(),
+		prevChar:    nullChar,
+		prevCharPos: newPosition(),
+		reachedEOF:  false,
 	}
 }
 
@@ -146,6 +161,20 @@ func (l *lexer) next() (*token, error) {
 			return nil, err
 		}
 		return newPatternToken(pos, text), nil
+	case c == '/':
+		c, _, err := l.read()
+		if err != nil {
+			return nil, err
+		}
+		if c != '/' {
+			l.restore()
+			break
+		}
+		text, err := l.readComment()
+		if err != nil {
+			return nil, err
+		}
+		return newCommentToken(pos, text), nil
 	}
 
 	text, err := l.readUnknown()
@@ -215,20 +244,58 @@ func isIDHeadChar(c rune) bool {
 func (l *lexer) readPattern() (string, error) {
 	var b strings.Builder
 	for {
-		c, eof, err := l.read()
+		c, terminated, eof, err := l.readEscapedChar()
 		if err != nil {
 			return "", err
-		}
-		if c == '"' {
-			break
 		}
 		if eof {
 			return "", fmt.Errorf("unclosed pattern string")
 		}
+		if terminated {
+			break
+		}
+
 		fmt.Fprint(&b, string(c))
 	}
 	if b.Len() <= 0 {
 		return "", fmt.Errorf("empty pattern string")
+	}
+
+	return b.String(), nil
+}
+
+func (l *lexer) readEscapedChar() (rune, bool, bool, error) {
+	c, eof, err := l.read()
+	if err != nil {
+		return nullChar, false, false, err
+	}
+	if c == '\\' {
+		ec, _, err := l.read()
+		if err != nil {
+			return nullChar, false, false, err
+		}
+		if ec == '"' || ec == '\\' {
+			return ec, false, false, nil
+		}
+		return nullChar, false, false, fmt.Errorf("unsupported escape sequence: \\%s", string(ec))
+	}
+	if c == '"' {
+		return nullChar, true, false, nil
+	}
+	return c, false, eof, nil
+}
+
+func (l *lexer) readComment() (string, error) {
+	var b strings.Builder
+	for {
+		c, eof, err := l.read()
+		if err != nil {
+			return "", err
+		}
+		if c == '\n' || c == '\r' || eof {
+			break
+		}
+		fmt.Fprint(&b, string(c))
 	}
 
 	return b.String(), nil
@@ -263,17 +330,24 @@ func isUnknownChar(c rune) bool {
 }
 
 func isHeadChar(c rune) bool {
-	return c == ':' || c == '|' || c == ';' || c == '?' || c == '*' || c == '+' || isIDHeadChar(c) || c == '"' || isWhitespace(c)
+	return c == ':' || c == '|' || c == ';' || c == '?' || c == '*' || c == '+' || isIDHeadChar(c) || c == '"' || c == '/' || isWhitespace(c)
 }
 
 func (l *lexer) read() (rune, bool, error) {
 	c, _, err := l.src.ReadRune()
 	if err != nil {
 		if err == io.EOF {
+			l.prevChar = l.lastChar
+			l.prevCharPos = l.lastCharPos
+			l.lastChar = nullChar
+			l.lastCharPos = l.pos
+			l.reachedEOF = true
 			return nullChar, true, nil
 		}
 		return nullChar, false, err
 	}
+	l.prevChar = l.lastChar
+	l.prevCharPos = l.lastCharPos
 	l.lastChar = c
 	l.lastCharPos = l.pos
 	l.pos.increment(c)
@@ -281,10 +355,20 @@ func (l *lexer) read() (rune, bool, error) {
 }
 
 func (l *lexer) restore() error {
+	if l.reachedEOF {
+		l.pos = l.lastCharPos
+		l.lastChar = l.prevChar
+		l.lastCharPos = l.prevCharPos
+		l.prevChar = nullChar
+		l.reachedEOF = false
+		return l.src.UnreadRune()
+	}
 	if l.lastChar == nullChar {
 		return fmt.Errorf("since the previous character is null, the lexer failed to call the restore")
 	}
 	l.pos = l.lastCharPos
-	l.lastChar = nullChar
+	l.lastChar = l.prevChar
+	l.lastCharPos = l.prevCharPos
+	l.prevChar = nullChar
 	return l.src.UnreadRune()
 }
