@@ -31,6 +31,13 @@ func TestLexer_Run(t *testing.T) {
 			},
 		},
 		{
+			caption: "the lexer can recognize escape sequences in pattern",
+			src:     `"\"\\"`,
+			tokens: []*token{
+				newPatternToken(dummyPos, `"\`),
+			},
+		},
+		{
 			caption: "the lexer can recognize comments",
 			src:     "// This is newline-terminated comment.\n// This is eof-terminated comment.",
 			tokens: []*token{

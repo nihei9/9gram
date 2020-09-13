@@ -244,16 +244,17 @@ func isIDHeadChar(c rune) bool {
 func (l *lexer) readPattern() (string, error) {
 	var b strings.Builder
 	for {
-		c, eof, err := l.read()
+		c, terminated, eof, err := l.readEscapedChar()
 		if err != nil {
 			return "", err
-		}
-		if c == '"' {
-			break
 		}
 		if eof {
 			return "", fmt.Errorf("unclosed pattern string")
 		}
+		if terminated {
+			break
+		}
+
 		fmt.Fprint(&b, string(c))
 	}
 	if b.Len() <= 0 {
@@ -261,6 +262,27 @@ func (l *lexer) readPattern() (string, error) {
 	}
 
 	return b.String(), nil
+}
+
+func (l *lexer) readEscapedChar() (rune, bool, bool, error) {
+	c, eof, err := l.read()
+	if err != nil {
+		return nullChar, false, false, err
+	}
+	if c == '\\' {
+		ec, _, err := l.read()
+		if err != nil {
+			return nullChar, false, false, err
+		}
+		if ec == '"' || ec == '\\' {
+			return ec, false, false, nil
+		}
+		return nullChar, false, false, fmt.Errorf("unsupported escape sequence: \\%s", string(ec))
+	}
+	if c == '"' {
+		return nullChar, true, false, nil
+	}
+	return c, false, eof, nil
 }
 
 func (l *lexer) readComment() (string, error) {
