@@ -11,13 +11,16 @@ import (
 type tokenKind string
 
 const (
-	tokenKindColon     = tokenKind(":")
-	tokenKindVBar      = tokenKind("|")
-	tokenKindSemicolon = tokenKind(";")
-	tokenKindID        = tokenKind("id")
-	tokenKindPattern   = tokenKind("pattern")
-	tokenKindEOF       = tokenKind("eof")
-	tokenKindUnknown   = tokenKind("unknown")
+	tokenKindColon      = tokenKind(":")
+	tokenKindVBar       = tokenKind("|")
+	tokenKindSemicolon  = tokenKind(";")
+	tokenKindOptional   = tokenKind("?")
+	tokenKindZeorOrMore = tokenKind("*")
+	tokenKindOneOrMore  = tokenKind("+")
+	tokenKindID         = tokenKind("id")
+	tokenKindPattern    = tokenKind("pattern")
+	tokenKindEOF        = tokenKind("eof")
+	tokenKindUnknown    = tokenKind("unknown")
 )
 
 type Position struct {
@@ -125,6 +128,12 @@ func (l *lexer) next() (*token, error) {
 		return newSymbolToken(pos, tokenKindVBar), nil
 	case c == ';':
 		return newSymbolToken(pos, tokenKindSemicolon), nil
+	case c == '?':
+		return newSymbolToken(pos, tokenKindOptional), nil
+	case c == '*':
+		return newSymbolToken(pos, tokenKindZeorOrMore), nil
+	case c == '+':
+		return newSymbolToken(pos, tokenKindOneOrMore), nil
 	case isIDChar(c):
 		text, err := l.readID()
 		if err != nil {
@@ -254,7 +263,7 @@ func isUnknownChar(c rune) bool {
 }
 
 func isHeadChar(c rune) bool {
-	return c == ':' || c == '|' || c == ';' || isIDHeadChar(c) || c == '"' || isWhitespace(c)
+	return c == ':' || c == '|' || c == ';' || c == '?' || c == '*' || c == '+' || isIDHeadChar(c) || c == '"' || isWhitespace(c)
 }
 
 func (l *lexer) read() (rune, bool, error) {

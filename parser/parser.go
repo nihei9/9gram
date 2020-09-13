@@ -13,6 +13,9 @@ const (
 	ASTTypeAlternative = ASTType("alternative")
 	ASTTypeSymbol      = ASTType("symbol")
 	ASTTypePattern     = ASTType("pattern")
+	ASTTypeOptional    = ASTType("optional")
+	ASTTypeZeroOrMore  = ASTType("zero or more")
+	ASTTypeOneOrMore   = ASTType("one or more ")
 )
 
 type AST struct {
@@ -127,15 +130,28 @@ func (p *parser) parseAlternative() {
 	defer p.leave()
 
 	for {
-		if p.consume(tokenKindID) {
+		switch {
+		case p.consume(tokenKindID):
 			p.as(ASTTypeSymbol)
+			p.parseQualifier()
 			continue
-		}
-		if p.consume(tokenKindPattern) {
+		case p.consume(tokenKindPattern):
 			p.as(ASTTypePattern)
+			p.parseQualifier()
 			continue
 		}
 		break
+	}
+}
+
+func (p *parser) parseQualifier() {
+	switch {
+	case p.consume(tokenKindOptional):
+		p.as(ASTTypeOptional)
+	case p.consume(tokenKindZeorOrMore):
+		p.as(ASTTypeZeroOrMore)
+	case p.consume(tokenKindOneOrMore):
+		p.as(ASTTypeOneOrMore)
 	}
 }
 
